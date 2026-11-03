@@ -1,0 +1,40 @@
+{
+  "name": "agentpay-mcp",
+  "version": "0.1.0",
+  "description": "Give any AI agent a wallet and the ability to pay for services — x402 crypto (USDC) + PayPal — over MCP. Add it to Claude or Codex, fund once, and your agent pays autonomously.",
+  "type": "module",
+  "bin": {
+    "agentpay-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "selftest": "node dist/selftest.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "x402",
+    "paypal",
+    "agentic-payments",
+    "pyusd",
+    "usdc",
+    "ai-agent",
+    "wallet"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "thirdweb": "^5.80.0",
+    "viem": "^2.21.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  }
+}
