@@ -140,6 +140,44 @@ server.tool(
   },
 );
 
+// ── browse_market ─────────────────────────────────────────────────────────────
+const MARKET_BASE = process.env.AGENTPAY_MARKET_BASE ?? "https://agentpay-test.carry.exchange";
+const CATALOGUE = [
+  {
+    id: "brent",
+    title: "Live BRENT market snapshot",
+    vendor: "Carry Exchange",
+    priceUSD: "$0.001",
+    url: `${MARKET_BASE}/api/premium`,
+  },
+  {
+    id: "signal",
+    title: "Commodity momentum signal",
+    vendor: "Carry Quant",
+    priceUSD: "$0.001",
+    url: `${MARKET_BASE}/api/signal`,
+  },
+  {
+    id: "book",
+    title: '"Agentic Payments" — Chapter 1',
+    vendor: "AgentPay Press",
+    priceUSD: "$0.001",
+    url: `${MARKET_BASE}/api/book`,
+  },
+];
+
+server.tool(
+  "browse_market",
+  "List the services the agent can buy, with their USD price and URL. Pass a URL from here to pay_for_service to purchase one.",
+  {},
+  async () => {
+    const lines = CATALOGUE.map(
+      (i) => `• ${i.title} — ${i.vendor} — ${i.priceUSD}\n  ${i.url}`,
+    );
+    return text(`Marketplace (${MARKET_BASE}):\n\n${lines.join("\n")}`);
+  },
+);
+
 // ── pay_for_service ──────────────────────────────────────────────────────────
 server.tool(
   "pay_for_service",
@@ -165,30 +203,6 @@ server.tool(
     } catch (e: any) {
       return text(`Payment failed: ${e?.message ?? String(e)}`);
     }
-  },
-);
-
-// ── pay_paypal ───────────────────────────────────────────────────────────────
-server.tool(
-  "pay_paypal",
-  "Pay a merchant directly via PayPal in USD (fiat rail). Returns an approval link to complete the payment.",
-  {
-    amountUSD: z.string(),
-    description: z.string().describe("What the payment is for."),
-  },
-  async ({ amountUSD, description }) => {
-    const order = await createOrder(
-      Number(amountUSD.replace(/[$,\s]/g, "")).toFixed(2),
-      description,
-    );
-    return text(
-      [
-        `💳 PayPal payment created: ${toUSD(usdToBaseUnits(amountUSD))} USD for "${description}".`,
-        `Order: ${order.id}`,
-        `Approve here: ${order.approveUrl ?? "(no link)"}`,
-        `Then call confirm_funding with orderId "${order.id}" to capture it.`,
-      ].join("\n"),
-    );
   },
 );
 
