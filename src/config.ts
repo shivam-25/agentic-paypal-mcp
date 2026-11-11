@@ -37,6 +37,13 @@ export const PAYPAL_LOGIN_REDIRECT =
   process.env.AGENTPAY_LOGIN_REDIRECT ??
   `http://127.0.0.1:${PAYPAL_LOGIN_PORT}${PAYPAL_LOGIN_PATH}`;
 
+// Local web interface: landing page, setup, dashboard and demo store.
+export const WEB_UI_PORT = Number(process.env.AGENTPAY_UI_PORT ?? 8766);
+
+// PayPal account that is paid by purchases from the demo store. Use a sandbox
+// business account.
+export const DEMO_MERCHANT = process.env.AGENTPAY_DEMO_MERCHANT ?? "";
+
 export const THIRDWEB_SECRET_KEY = process.env.THIRDWEB_SECRET_KEY ?? "";
 
 // Default settlement chain for the crypto rail. The pay tool is chain-agnostic:
