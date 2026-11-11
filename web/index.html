@@ -13,6 +13,7 @@ body[data-view="dashboard"] { --page:#EFF8F5; --accent:#00795C; }
 body[data-view="store"] { --page:#FFF5EE; --accent:#C2410C; }
 body[data-view="about"] { --page:#EEF8FB; --accent:#0E7490; }
 body[data-view="merchant"] { --page:#FBF3FC; --accent:#A21CAF; }
+body[data-view="wallet"] { --page:#EEF4FF; --accent:#1D4ED8; }
 body { margin:0; background:var(--page); color:var(--ink); font:17px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
 a { color:inherit; }
 :focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
@@ -85,6 +86,13 @@ pre { background:var(--ink); color:var(--page); padding:18px 20px; border-radius
 .side .facts { grid-template-columns:1fr; }
 .side .order { grid-template-columns:1fr auto; }
 .side .order .btn { grid-column:1 / -1; text-align:center; font-size:15px; padding:10px 14px; }
+.wcard { background:var(--ink); color:#FFFFFF; border-radius:20px; padding:30px 32px; max-width:560px; margin-bottom:20px; }
+.wcard .big { font:700 56px/1 var(--round); margin:10px 0 22px; font-variant-numeric:tabular-nums; }
+.wcard dl { display:grid; gap:12px; margin:0; }
+.wcard dt { font-size:13px; color:#9FB2D3; }
+.wcard dd { margin:0; overflow-wrap:anywhere; }
+.amt.in { color:var(--ok); }
+.field { font:inherit; padding:12px; border:2px solid var(--line); border-radius:12px; color:var(--ink); background:#FFFFFF; }
 .limit { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:14px; }
 .money { font:600 19px/1 var(--round); }
 .money input { font:inherit; width:120px; padding:12px; margin-left:4px; border:2px solid var(--line); border-radius:12px; color:var(--ink); }
@@ -98,7 +106,7 @@ pre { background:var(--ink); color:var(--page); padding:18px 20px; border-radius
 <header><div class="wrap">
   <a class="brand" href="#/">Agentic PayPal</a>
   <nav aria-label="Main">
-    <a href="#/">Chat</a><a href="#/dashboard">Dashboard</a><a href="#/store">Demo store</a><a href="#/merchant">Merchant</a><a href="#/setup">Set up</a><a href="#/about">About</a>
+    <a href="#/">Chat</a><a href="#/wallet">Wallet</a><a href="#/dashboard">Dashboard</a><a href="#/store">Demo store</a><a href="#/merchant">Merchant</a><a href="#/setup">Set up</a><a href="#/about">About</a>
   </nav>
 </div></header>
 <main class="wrap">
@@ -217,10 +225,42 @@ pre { background:var(--ink); color:var(--page); padding:18px 20px; border-radius
       </form>
       <p class="muted" id="limit-msg" hidden></p>
     </div>
+    <div class="panel" id="standing-panel" hidden>
+      <h3>Standing instructions</h3>
+      <p class="muted">Things the agent should buy on its own, on a schedule, with nobody asking. Your limits still apply.</p>
+      <div id="standing-list"></div>
+      <form id="standing-form" class="limit" style="margin-top:14px">
+        <label class="sr" for="standing-text">Instruction</label>
+        <input class="field" id="standing-text" type="text" maxlength="300" placeholder="Keep coffee stocked: reorder Coffee beans from Fernhill Goods" required style="flex:1;min-width:260px">
+        <label class="sr" for="standing-every">How often</label>
+        <select class="field" id="standing-every"><option value="24">Every day</option><option value="168" selected>Every week</option></select>
+        <button class="btn" type="submit">Add</button>
+      </form>
+      <p class="muted" id="standing-msg" hidden></p>
+    </div>
     <h3 style="margin:28px 0 12px">Waiting for your approval</h3>
     <div class="panel" id="waiting"></div>
     <h3 style="margin:28px 0 12px">Paid</h3>
     <div class="panel" id="paid"></div>
+  </section>
+</div>
+
+<div id="view-wallet" hidden>
+  <section>
+    <h2>Wallet</h2>
+    <p>The agent's own wallet. It holds the money you moved in from PayPal, and it is what the agent pays from inside your limits.</p>
+    <p id="w-none" class="note" hidden>There is no wallet yet. <a href="#/setup">Log in with PayPal</a> to create one.</p>
+    <div class="wcard" id="w-card" hidden>
+      <div>Agent wallet balance</div>
+      <div class="big" id="w-balance"></div>
+      <dl>
+        <div><dt>Wallet address</dt><dd id="w-address"></dd></div>
+        <div><dt>Linked PayPal account</dt><dd id="w-paypal"></dd></div>
+        <div><dt>Held as</dt><dd id="w-asset"></dd></div>
+      </dl>
+    </div>
+    <h3 style="margin:28px 0 12px">Money in and out</h3>
+    <div class="panel" id="w-ledger"></div>
   </section>
 </div>
 
@@ -252,7 +292,7 @@ pre { background:var(--ink); color:var(--page); padding:18px 20px; border-radius
 
 </main>
 <script>
-var VIEWS = ["chat", "dashboard", "store", "merchant", "setup", "about"];
+var VIEWS = ["chat", "wallet", "dashboard", "store", "merchant", "setup", "about"];
 var timer = null;
 
 function el(tag, cls, text) {
@@ -284,6 +324,13 @@ function showStatus(s) {
   document.getElementById("f-balance").textContent = s.balance || "Unavailable";
   document.getElementById("f-wallet").textContent = s.wallet || "";
   document.getElementById("limit-panel").hidden = !s.linked;
+  document.getElementById("standing-panel").hidden = !s.linked;
+  document.getElementById("w-none").hidden = s.linked;
+  document.getElementById("w-card").hidden = !s.linked;
+  document.getElementById("w-balance").textContent = s.balance || "Unavailable";
+  document.getElementById("w-address").textContent = s.wallet || "";
+  document.getElementById("w-paypal").textContent = (s.email || "") + " (PayPal ID " + (s.paypalId || "") + ")";
+  document.getElementById("w-asset").textContent = "US dollar stablecoin, token " + s.asset + ", on " + (s.chainId === 421614 ? "the Arbitrum Sepolia test network" : "chain " + s.chainId);
   var limit = Number(s.autoLimit) || 0;
   var daily = Number(s.dailyLimit) || 0;
   var spent = Number(s.spentToday) || 0;
@@ -332,6 +379,19 @@ function showOrders(orders) {
     box.textContent = "";
     if (!groups[key].length) box.appendChild(el("p", "muted", empty[key]));
     groups[key].forEach(function (o) { box.appendChild(orderRow(o)); });
+  });
+  var ledger = document.getElementById("w-ledger");
+  ledger.textContent = "";
+  var moves = orders.filter(function (o) { return o.status === "paid" && (o.kind === "topup" || o.auto); });
+  if (!moves.length) ledger.appendChild(el("p", "muted", "Nothing yet. Add funds from PayPal to start."));
+  moves.forEach(function (o) {
+    var row = el("div", "order");
+    var what = el("div");
+    what.appendChild(el("div", "", o.kind === "topup" ? "Top-up from PayPal" : o.item + (o.merchant ? " to " + o.merchant : "")));
+    what.appendChild(el("div", "muted", new Date(o.paidAt).toLocaleString() + (o.decidedBy === "agent" ? ". Agent's choice" : "")));
+    row.appendChild(what);
+    row.appendChild(el("div", o.kind === "topup" ? "amt in" : "amt", (o.kind === "topup" ? "+$" : "-$") + o.amountUSD));
+    ledger.appendChild(row);
   });
   var side = document.getElementById("chat-waiting");
   side.textContent = "";
@@ -387,9 +447,34 @@ function showMerchant(store, orders) {
   });
 }
 
+function showStanding(list) {
+  var box = document.getElementById("standing-list");
+  box.textContent = "";
+  list.forEach(function (item) {
+    var row = el("div", "order");
+    var what = el("div");
+    what.appendChild(el("div", "", item.text));
+    var often = item.everyHours === 24 ? "Every day" : item.everyHours === 168 ? "Every week" : "Every " + item.everyHours + " hours";
+    what.appendChild(el("div", "muted", item.lastRunAt
+      ? often + ". Last ran " + new Date(item.lastRunAt).toLocaleTimeString() + " on its own: " + item.lastResult
+      : often + ". First run at the next check."));
+    row.appendChild(what);
+    var remove = el("button", "btn quiet", "Remove");
+    remove.type = "button";
+    remove.style.cssText = "font-size:15px;padding:10px 14px";
+    remove.addEventListener("click", function () {
+      fetch("/api/standing/remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id }) })
+        .then(function (r) { return r.json(); }).then(showStanding).catch(function () {});
+    });
+    row.appendChild(remove);
+    box.appendChild(row);
+  });
+}
+
 function refresh(view) {
   get("/api/status").then(showStatus).catch(function () {});
-  if (view === "dashboard" || view === "chat") get("/api/orders").then(showOrders).catch(function () {});
+  if (view === "dashboard" || view === "chat" || view === "wallet") get("/api/orders").then(showOrders).catch(function () {});
+  if (view === "dashboard") get("/api/standing").then(showStanding).catch(function () {});
   if (view === "store") get("/api/store").then(showStore).catch(function () {});
   if (view === "merchant") {
     Promise.all([get("/api/store"), get("/api/orders")]).then(function (r) { showMerchant(r[0], r[1]); }).catch(function () {});
@@ -485,6 +570,21 @@ document.getElementById("chat-form").addEventListener("submit", function (event)
   chip.type = "button";
   chip.addEventListener("click", function () { send(text); });
   document.getElementById("chips").appendChild(chip);
+});
+
+document.getElementById("standing-form").addEventListener("submit", function (event) {
+  event.preventDefault();
+  var box = document.getElementById("standing-text");
+  var msg = document.getElementById("standing-msg");
+  var body = { text: box.value, everyHours: Number(document.getElementById("standing-every").value) };
+  fetch("/api/standing", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      msg.hidden = !d.error;
+      msg.textContent = d.error ? "Not added. " + d.error : "";
+      if (!d.error) { box.value = ""; box.blur(); showStanding(d); }
+    })
+    .catch(function () { msg.hidden = false; msg.textContent = "Not added. The server did not answer."; });
 });
 
 document.getElementById("limit-form").addEventListener("submit", function (event) {
