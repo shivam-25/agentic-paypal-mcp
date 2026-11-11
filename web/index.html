@@ -66,6 +66,9 @@ pre { background:var(--ink); color:var(--page); padding:18px 20px; border-radius
 .item { background:var(--surface); border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:6px; }
 .item .price { font:700 26px/1 var(--round); margin:8px 0 12px; font-variant-numeric:tabular-nums; }
 .item .btn { margin-top:auto; font-size:15px; padding:12px 14px; text-align:center; }
+.limit { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:14px; }
+.money { font:600 19px/1 var(--round); }
+.money input { font:inherit; width:120px; padding:12px; margin-left:4px; border:2px solid var(--line); border-radius:12px; color:var(--ink); }
 .note { border-left:4px solid var(--accent); padding:4px 0 4px 14px; margin:0 0 20px; }
 [hidden] { display:none !important; }
 @media (max-width: 760px) { .hero, .steps { grid-template-columns:1fr; } .receipt { transform:none; } .order { grid-template-columns:1fr auto; } }
@@ -85,7 +88,7 @@ pre { background:var(--ink); color:var(--page); padding:18px 20px; border-radius
   <section class="hero">
     <div>
       <h1>Your agent shops. You approve. PayPal pays.</h1>
-      <p class="lede">Agentic PayPal lets Claude or Codex buy goods for you from any PayPal merchant. You log in once, and nothing is charged until you approve it in PayPal.</p>
+      <p class="lede">Agentic PayPal lets Claude or Codex buy goods for you from any PayPal merchant. Small purchases are paid at once from a balance you fund in advance, up to a limit you set. Larger ones wait for your approval in PayPal.</p>
       <a class="btn" href="#/setup">Set up your account</a>
       <a class="btn quiet" href="#/store">See the demo store</a>
     </div>
@@ -102,8 +105,8 @@ pre { background:var(--ink); color:var(--page); padding:18px 20px; border-radius
     <h2>How it works</h2>
     <ol class="steps">
       <li><h3>Log in with PayPal</h3><p class="muted">Logging in links your PayPal account to your agent. Only that account can approve its purchases.</p></li>
-      <li><h3>Ask your agent to buy</h3><p class="muted">The agent creates the order with the merchant and sends you a PayPal approval link.</p></li>
-      <li><h3>Approve in PayPal</h3><p class="muted">Once you approve, the merchant is paid and you get the PayPal receipt.</p></li>
+      <li><h3>Ask your agent to buy</h3><p class="muted">The agent places the order with the merchant, for anything a PayPal merchant sells.</p></li>
+      <li><h3>Approve only the big ones</h3><p class="muted">Purchases within your limit are paid at once from your balance. Larger ones wait for your approval in PayPal.</p></li>
     </ol>
   </section>
   <section>
@@ -131,8 +134,9 @@ pre { background:var(--ink); color:var(--page); padding:18px 20px; border-radius
       <button class="btn" id="login" type="button">Log in with PayPal</button>
     </div>
     <div class="panel">
-      <h3>2. Add funds, if you want the agent to pay for small digital services</h3>
-      <p class="muted">Ask your agent: "Add $5 to my wallet with PayPal." Buying goods does not need a balance.</p>
+      <h3>2. Add funds and set your limit</h3>
+      <p class="muted">Ask your agent: "Add $20 to my wallet with PayPal." Then choose on the dashboard how much it may spend without asking.</p>
+      <a class="btn quiet" href="#/dashboard">Set your limit</a>
     </div>
     <div class="panel">
       <h3>3. Try a purchase</h3>
@@ -153,6 +157,16 @@ pre { background:var(--ink); color:var(--page); padding:18px 20px; border-radius
         <div><dt>Wallet balance</dt><dd id="f-balance"></dd></div>
         <div><dt>Wallet address</dt><dd id="f-wallet" style="font-size:14px"></dd></div>
       </dl>
+    </div>
+    <div class="panel" id="limit-panel" hidden>
+      <h3>Automatic payments</h3>
+      <p class="muted" id="limit-text"></p>
+      <form id="limit-form" class="limit">
+        <label for="limit-input">Pay without asking up to</label>
+        <span class="money">$<input id="limit-input" type="number" min="0" max="100000" step="0.01" inputmode="decimal" required></span>
+        <button class="btn" type="submit">Save limit</button>
+      </form>
+      <p class="muted" id="limit-msg" hidden></p>
     </div>
     <h3 style="margin:28px 0 12px">Waiting for your approval</h3>
     <div class="panel" id="waiting"></div>
@@ -203,6 +217,13 @@ function showStatus(s) {
   document.getElementById("f-id").textContent = s.paypalId || "";
   document.getElementById("f-balance").textContent = s.balance || "Unavailable";
   document.getElementById("f-wallet").textContent = s.wallet || "";
+  document.getElementById("limit-panel").hidden = !s.linked;
+  var limit = Number(s.autoLimit) || 0;
+  document.getElementById("limit-text").textContent = limit > 0
+    ? "Purchases up to $" + limit.toFixed(2) + " are paid from your wallet balance without asking. Anything larger needs your approval in PayPal."
+    : "Automatic payments are off. Every purchase needs your approval in PayPal.";
+  var input = document.getElementById("limit-input");
+  if (document.activeElement !== input) input.value = limit;
 }
 
 function orderRow(o) {
@@ -214,7 +235,7 @@ function orderRow(o) {
   row.appendChild(what);
   row.appendChild(el("div", "amt", "$" + o.amountUSD));
   if (o.status === "paid") {
-    row.appendChild(el("span", "tag paid", "Paid"));
+    row.appendChild(el("span", "tag paid", o.auto ? "Paid automatically" : "Paid"));
   } else if (isPaypalUrl(o.approveUrl)) {
     var a = el("a", "btn", "Approve in PayPal");
     a.href = o.approveUrl; a.target = "_blank"; a.rel = "noopener";
@@ -294,6 +315,21 @@ document.getElementById("login").addEventListener("click", function () {
       err.textContent = "Could not start the PayPal login: " + (d.error || "no login link was returned") + ".";
     })
     .catch(function () { button.disabled = false; });
+});
+
+document.getElementById("limit-form").addEventListener("submit", function (event) {
+  event.preventDefault();
+  var msg = document.getElementById("limit-msg");
+  var value = Number(document.getElementById("limit-input").value);
+  fetch("/api/limit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limitUSD: value }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      msg.hidden = false;
+      msg.textContent = d.error ? "Limit not saved. " + d.error : "Limit saved.";
+      document.getElementById("limit-input").blur();
+      refresh("dashboard");
+    })
+    .catch(function () { msg.hidden = false; msg.textContent = "Limit not saved. The server did not answer."; });
 });
 
 window.addEventListener("hashchange", route);
