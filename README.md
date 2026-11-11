@@ -46,6 +46,17 @@ The wallet belongs to one PayPal account, and the server enforces it:
 | `browse_market` | List digital services the wallet can pay for. |
 | `pay_for_service` | Call a URL; on HTTP 402, pay from the wallet and return the content. |
 
+## Automatic payments
+
+Purchases come in two kinds, split by a limit the user sets:
+
+- **At or under the limit**: paid at once from the pre-funded wallet, with no approval step. The merchant is paid from this app's PayPal balance (Payouts API) and the same amount leaves the wallet.
+- **Over the limit**: the agent creates a PayPal order and the user approves it in PayPal, as before.
+
+The limit starts at $10. The user changes it on the dashboard, to any amount from $0 (off) up to $100,000. There is deliberately no agent tool that changes the limit, so an agent cannot raise its own spending limit. A purchase the wallet balance cannot cover goes to PayPal for approval.
+
+Automatic payments need `AGENTPAY_TREASURY_ADDRESS` set and Payouts enabled on the PayPal app.
+
 ## Web interface
 
 While the server runs, it serves a web interface at `http://127.0.0.1:8766`, on your machine only:
@@ -128,9 +139,10 @@ node --env-file=.env dist/selftest.js
 - ⬜ Log in with PayPal and account-to-wallet linking (written, not yet run against the sandbox)
 - ⬜ Merchant purchases with `buy_with_paypal` (written, not yet run against the sandbox)
 - ⬜ Web interface (checked locally with sample data, not yet run with live PayPal data)
+- ⬜ Automatic payments within the limit (limit logic tested locally with PayPal stubbed, not yet run against the sandbox)
 - ⬜ funded green run (send test USD to the wallet)
 
-Next: let the user pre-approve a spending limit so the agent can buy without an approval step per order.
+Automatic payments are paid by this app's PayPal account, not the buyer's, so PayPal buyer protection does not cover them. Check the rules for holding and paying out customer funds before using this with real money.
 
 ## Testnet only
 
