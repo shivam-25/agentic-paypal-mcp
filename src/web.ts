@@ -3,14 +3,15 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { autoApproveLimit, setAutoApproveLimit } from "./autopay.js";
+import { chat, chatReady } from "./chat.js";
 import { DEMO_MERCHANT, PAYPAL_ENVIRONMENT, WEB_UI_PORT } from "./config.js";
 import { lastLoginError, startPaypalLogin } from "./login.js";
 import { PRODUCTS, STORE_NAME, loadOrders } from "./store.js";
 import { loadWalletMeta, usdBalance } from "./wallet.js";
 
 /**
- * The web interface: one page (web/index.html) with the landing page, setup,
- * dashboard and demo store, plus the small JSON API it reads. It is served on
+ * The web interface: one page (web/index.html) with the chat console, setup,
+ * dashboard, demo store and an about page, plus the small JSON API it reads. It is served on
  * 127.0.0.1 only, for the person whose machine the agent runs on.
  */
 
@@ -29,7 +30,7 @@ function readBody(req: IncomingMessage): Promise<string> {
     let data = "";
     req.on("data", (chunk) => {
       data += chunk;
-      if (data.length > 10_000) reject(new Error("Request too large."));
+      if (data.length > 200_000) reject(new Error("Request too large."));
     });
     req.on("end", () => resolve(data || "{}"));
     req.on("error", reject);
@@ -48,6 +49,7 @@ async function status() {
     wallet: meta?.address ?? null,
     balance,
     autoLimit: autoApproveLimit(),
+    chatReady: chatReady(),
     loginError: lastLoginError(),
   };
 }
@@ -71,6 +73,12 @@ export function startWebUi() {
         json(res, 200, loadOrders());
       } else if (req.method === "GET" && path === "/api/store") {
         json(res, 200, { name: STORE_NAME, merchant: DEMO_MERCHANT || null, products: PRODUCTS });
+      } else if (req.method === "POST" && path === "/api/chat") {
+        if (!(req.headers["content-type"] ?? "").startsWith("application/json")) {
+          json(res, 415, { error: "Send JSON." });
+        } else {
+          json(res, 200, await chat(JSON.parse(await readBody(req)).messages));
+        }
       } else if (req.method === "POST" && path === "/api/limit") {
         // Only the person at the browser sets the limit; there is no agent tool for it.
         if (!(req.headers["content-type"] ?? "").startsWith("application/json")) {
