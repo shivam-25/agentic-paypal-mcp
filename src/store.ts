@@ -36,6 +36,8 @@ export interface OrderRecord {
   approveUrl?: string;
   createdAt: string;
   paidAt?: string;
+  /** Paid from the wallet without asking, because it was within the user's limit. */
+  auto?: boolean;
 }
 
 const ORDERS_FILE = join(AGENTPAY_HOME, "orders.json");
@@ -74,4 +76,12 @@ export function markOrderPaid(id: string) {
   order.paidAt = new Date().toISOString();
   delete order.approveUrl;
   saveOrders(orders);
+}
+
+/** Log a purchase that was paid automatically from the wallet. */
+export function recordAutoPaidOrder(order: Pick<OrderRecord, "id" | "kind" | "item" | "merchant" | "amountUSD">) {
+  const now = new Date().toISOString();
+  const orders = loadOrders();
+  orders.unshift({ ...order, status: "paid", auto: true, createdAt: now, paidAt: now });
+  saveOrders(orders.slice(0, 200));
 }
