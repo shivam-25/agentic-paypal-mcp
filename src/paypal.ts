@@ -204,3 +204,39 @@ export async function getOrder(orderId: string): Promise<{
     raw: json,
   };
 }
+
+/**
+ * Pay a merchant from this app's own PayPal balance (Payouts API). Used for
+ * automatic payments, where the user has pre-funded the wallet.
+ */
+export async function sendPayout(
+  receiver: string,
+  amountUSD: string,
+  note: string,
+): Promise<{ payoutId: string; status: string }> {
+  const token = await paypalAccessToken();
+  const res = await fetch(`${PAYPAL_API_BASE}/v1/payments/payouts`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sender_batch_header: {
+        sender_batch_id: `agentic-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        email_subject: `Payment from ${BRAND_NAME}`,
+      },
+      items: [
+        {
+          recipient_type: receiver.includes("@") ? "EMAIL" : "PAYPAL_ID",
+          receiver,
+          amount: { value: amountUSD, currency: "USD" },
+          note: note.slice(0, 127),
+        },
+      ],
+    }),
+  });
+  const json: any = await res.json();
+  if (!res.ok) throw new Error(`PayPal payout failed: ${res.status} ${JSON.stringify(json)}`);
+  return {
+    payoutId: json?.batch_header?.payout_batch_id,
+    status: json?.batch_header?.batch_status,
+  };
+}
