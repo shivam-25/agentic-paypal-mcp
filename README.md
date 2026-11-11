@@ -1,16 +1,16 @@
-# AgentPay
+# Agentic paypal
 
-**Give any AI agent a wallet and the ability to pay for services.**
+**Paypal for Agentic Economy.**
 
-AgentPay is a [Model Context Protocol](https://modelcontextprotocol.io) server. Add it to
+AgenticPaypal is a [Model Context Protocol](https://modelcontextprotocol.io) server. Add it to
 **Claude Desktop, Claude Code, or Codex**, onboard with an email, fund it occasionally — and
-your agent pays for services on its own, in **USD**. No payment code, no seed phrases, no
+your agent pays for goods and services on its own, using paypal, across the globe, in **USD**. No payment code, no seed phrases, no
 hand-holding.
 
 Built for the **PayPal AI Hackathon**. Two payment rails:
 
 - **PayPal** — fund the agent wallet and pay merchants (Orders API, sandbox).
-- **x402** — pay any HTTP `402 Payment Required` service automatically, on any chain.
+- **x402** — pay any HTTP `402 Payment Required` service automatically.
 
 Wallets are **thirdweb** server wallets (managed, recoverable, on-ramp-ready). Everything is
 presented to the user in dollars; the stablecoin underneath is an implementation detail.
@@ -29,7 +29,7 @@ You: "get me the premium oil-market feed"
 
 Three flows:
 
-1. **Onboard** (once) — `setup_wallet(email)` creates a thirdweb wallet for your email and
+1. **Onboard** (once) — Onboard customer using their email associated with paypal. In the background, a thirdweb wallet for your email and
    returns a setup link.
 2. **Fund** (occasionally) — `fund_with_paypal($5)` → approve in PayPal → wallet credited.
 3. **Pay** (every purchase) — `pay_for_service(url)` pays x402 services; `pay_paypal(...)`
