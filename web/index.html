@@ -150,7 +150,7 @@ pre { background:var(--ink); color:var(--page); padding:18px 20px; border-radius
     <h2>How it works</h2>
     <ol class="steps">
       <li><h3>Log in with PayPal</h3><p class="muted">Logging in links your PayPal account to your agent. Only that account can approve its purchases.</p></li>
-      <li><h3>Ask your agent to buy</h3><p class="muted">The agent places the order with the merchant, for anything a PayPal merchant sells.</p></li>
+      <li><h3>Ask your agent to buy</h3><p class="muted">Name the item, or give the agent a goal and let it choose. Your limits apply either way.</p></li>
       <li><h3>Approve only the big ones</h3><p class="muted">Purchases within your limit are paid at once from your balance. Larger ones wait for your approval in PayPal.</p></li>
     </ol>
   </section>
@@ -209,7 +209,10 @@ pre { background:var(--ink); color:var(--page); padding:18px 20px; border-radius
       <form id="limit-form" class="limit">
         <label for="limit-input">Pay without asking up to</label>
         <span class="money">$<input id="limit-input" type="number" min="0" max="100000" step="0.01" inputmode="decimal" required></span>
-        <button class="btn" type="submit">Save limit</button>
+        <label for="daily-input">a purchase, and</label>
+        <span class="money">$<input id="daily-input" type="number" min="0" max="100000" step="0.01" inputmode="decimal" required></span>
+        <span>a day</span>
+        <button class="btn" type="submit">Save limits</button>
       </form>
       <p class="muted" id="limit-msg" hidden></p>
     </div>
@@ -264,13 +267,17 @@ function showStatus(s) {
   document.getElementById("f-wallet").textContent = s.wallet || "";
   document.getElementById("limit-panel").hidden = !s.linked;
   var limit = Number(s.autoLimit) || 0;
-  document.getElementById("limit-text").textContent = limit > 0
-    ? "Purchases up to $" + limit.toFixed(2) + " are paid from your wallet balance without asking. Anything larger needs your approval in PayPal."
+  var daily = Number(s.dailyLimit) || 0;
+  var spent = Number(s.spentToday) || 0;
+  document.getElementById("limit-text").textContent = limit > 0 && daily > 0
+    ? "Purchases up to $" + limit.toFixed(2) + " are paid from your wallet without asking, up to $" + daily.toFixed(2) + " a day. This covers what you ask for and what the agent chooses itself. Anything beyond needs your approval in PayPal. Paid automatically today: $" + spent.toFixed(2) + "."
     : "Automatic payments are off. Every purchase needs your approval in PayPal.";
   var input = document.getElementById("limit-input");
   if (document.activeElement !== input) input.value = limit;
+  var dailyInput = document.getElementById("daily-input");
+  if (document.activeElement !== dailyInput) dailyInput.value = daily;
   document.getElementById("c-balance").textContent = s.linked ? (s.balance || "Unavailable") : "Not set up";
-  document.getElementById("c-limit").textContent = limit > 0 ? "$" + limit.toFixed(2) : "Off";
+  document.getElementById("c-limit").textContent = limit > 0 && daily > 0 ? "$" + limit.toFixed(2) + " a purchase, $" + daily.toFixed(2) + " a day" : "Off";
   var note = document.getElementById("chat-note");
   note.hidden = s.chatReady && s.linked;
   note.textContent = !s.chatReady
@@ -284,6 +291,7 @@ function orderRow(o) {
   what.appendChild(el("div", "", o.item));
   var when = new Date(o.paidAt || o.createdAt).toLocaleString();
   what.appendChild(el("div", "muted", (o.merchant ? o.merchant + ", " : "") + when));
+  if (o.decidedBy === "agent") what.appendChild(el("div", "muted", "Agent's choice: " + (o.reason || "no reason given")));
   row.appendChild(what);
   row.appendChild(el("div", "amt", "$" + o.amountUSD));
   if (o.status === "paid") {
@@ -437,11 +445,12 @@ document.getElementById("limit-form").addEventListener("submit", function (event
   event.preventDefault();
   var msg = document.getElementById("limit-msg");
   var value = Number(document.getElementById("limit-input").value);
-  fetch("/api/limit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limitUSD: value }) })
+  var day = Number(document.getElementById("daily-input").value);
+  fetch("/api/limit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limitUSD: value, dailyUSD: day }) })
     .then(function (r) { return r.json(); })
     .then(function (d) {
       msg.hidden = false;
-      msg.textContent = d.error ? "Limit not saved. " + d.error : "Limit saved.";
+      msg.textContent = d.error ? "Limits not saved. " + d.error : "Limits saved.";
       document.getElementById("limit-input").blur();
       refresh("dashboard");
     })
