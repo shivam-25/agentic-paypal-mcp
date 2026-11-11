@@ -14,13 +14,24 @@ import {
  * The agent's wallet is a thirdweb **server wallet** (managed, recoverable,
  * and the basis for on-ramp top-ups). It is created once on first use and its
  * address is cached on the host machine. All amounts are reported in USD.
+ *
+ * The wallet is linked to one PayPal account: the user proves ownership with
+ * "Log in with PayPal", and that account's id is stored with the wallet. Only
+ * that PayPal account can fund the wallet or approve purchases.
  */
 
-interface WalletMeta {
+export interface WalletMeta {
   address: string;
   label: string;
+  /** PayPal account id this wallet is linked to (set by Log in with PayPal). */
+  paypalPayerId?: string;
   email?: string;
   createdAt: string;
+}
+
+export interface PaypalLink {
+  payerId: string;
+  email?: string;
 }
 
 export function loadWalletMeta(): WalletMeta | null {
@@ -34,26 +45,36 @@ export function loadWalletMeta(): WalletMeta | null {
 
 /**
  * Create the agent's thirdweb server wallet if it doesn't exist yet; return its
- * metadata. The wallet is keyed to the user's email (used as the label so it is
- * recoverable/identifiable and claimable from the setup UI).
+ * metadata. Pass the identity from Log in with PayPal to link the wallet to
+ * that PayPal account. A wallet already linked to one PayPal account cannot be
+ * re-linked to another.
  */
-export async function getOrCreateWallet(email?: string): Promise<WalletMeta> {
+export async function getOrCreateWallet(paypal?: PaypalLink): Promise<WalletMeta> {
   const existing = loadWalletMeta();
   if (existing) {
-    if (email && !existing.email) {
-      existing.email = email;
-      writeFileSync(WALLET_FILE, JSON.stringify(existing, null, 2));
+    if (paypal) {
+      if (existing.paypalPayerId && existing.paypalPayerId !== paypal.payerId) {
+        throw new Error(
+          "This wallet is already linked to a different PayPal account. Log in with the original account.",
+        );
+      }
+      if (!existing.paypalPayerId) {
+        existing.paypalPayerId = paypal.payerId;
+        if (paypal.email) existing.email = paypal.email;
+        writeFileSync(WALLET_FILE, JSON.stringify(existing, null, 2));
+      }
     }
     return existing;
   }
 
   const client = thirdwebClient();
-  const label = email ? `agentpay:${email}` : `agentpay-${Date.now()}`;
+  const label = paypal ? `agentpay:paypal:${paypal.payerId}` : `agentpay-${Date.now()}`;
   const serverWallet = await Engine.createServerWallet({ client, label });
   const meta: WalletMeta = {
     address: serverWallet.address,
     label,
-    email,
+    paypalPayerId: paypal?.payerId,
+    email: paypal?.email,
     createdAt: new Date().toISOString(),
   };
   writeFileSync(WALLET_FILE, JSON.stringify(meta, null, 2));

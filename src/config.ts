@@ -10,6 +10,9 @@ import { createThirdwebClient, type ThirdwebClient } from "thirdweb";
  * stablecoin is an implementation detail and never surfaced by name.
  */
 
+// Product name shown to the user (PayPal checkout, login page, tool output).
+export const BRAND_NAME = "Agentic PayPal";
+
 export const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID ?? "";
 export const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET ?? "";
 export const PAYPAL_ENVIRONMENT = (process.env.PAYPAL_ENVIRONMENT ?? "SANDBOX").toUpperCase();
@@ -18,6 +21,28 @@ export const PAYPAL_API_BASE =
   (PAYPAL_ENVIRONMENT === "PRODUCTION"
     ? "https://api-m.paypal.com"
     : "https://api-m.sandbox.paypal.com");
+
+// PayPal's browser-facing host, used for the "Log in with PayPal" page.
+export const PAYPAL_WEB_BASE =
+  process.env.PAYPAL_WEB_BASE ??
+  (PAYPAL_ENVIRONMENT === "PRODUCTION"
+    ? "https://www.paypal.com"
+    : "https://www.sandbox.paypal.com");
+
+// "Log in with PayPal" returns the user to a short-lived listener on this
+// machine. The redirect URL must be registered as a return URL on the PayPal app.
+export const PAYPAL_LOGIN_PORT = Number(process.env.AGENTPAY_LOGIN_PORT ?? 8765);
+export const PAYPAL_LOGIN_PATH = "/paypal/callback";
+export const PAYPAL_LOGIN_REDIRECT =
+  process.env.AGENTPAY_LOGIN_REDIRECT ??
+  `http://127.0.0.1:${PAYPAL_LOGIN_PORT}${PAYPAL_LOGIN_PATH}`;
+
+// Local web interface: landing page, setup, dashboard and demo store.
+export const WEB_UI_PORT = Number(process.env.AGENTPAY_UI_PORT ?? 8766);
+
+// PayPal account that is paid by purchases from the demo store. Use a sandbox
+// business account.
+export const DEMO_MERCHANT = process.env.AGENTPAY_DEMO_MERCHANT ?? "";
 
 export const THIRDWEB_SECRET_KEY = process.env.THIRDWEB_SECRET_KEY ?? "";
 

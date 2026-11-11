@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic PayPal</title>
+<style>
+:root { --page:#F2F6FF; --surface:#FFFFFF; --ink:#0B1F3A; --muted:#56657F; --accent:#1F5EFF; --ok:#0A7D5A; --line:#DCE3EE;
+  --round: ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", "Arial Rounded MT Bold", system-ui, sans-serif; }
+* { box-sizing:border-box; }
+body[data-view="setup"] { --page:#F5F3FF; --accent:#5B3DF5; }
+body[data-view="dashboard"] { --page:#EFF8F5; --accent:#00795C; }
+body[data-view="store"] { --page:#FFF5EE; --accent:#C2410C; }
+body[data-view="about"] { --page:#EEF8FB; --accent:#0E7490; }
+body { margin:0; background:var(--page); color:var(--ink); font:17px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color:inherit; }
+:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+.wrap { max-width:1040px; margin:0 auto; padding:0 24px; }
+header { background:var(--ink); color:#FFFFFF; }
+header .wrap { display:flex; flex-wrap:wrap; align-items:center; gap:8px 28px; padding-top:20px; padding-bottom:20px; }
+.brand { font:700 20px/1 var(--round); text-decoration:none; margin-right:auto; }
+nav { display:flex; flex-wrap:wrap; gap:4px; }
+nav a { text-decoration:none; padding:8px 14px; border-radius:999px; font-weight:500; }
+nav a[aria-current="page"] { background:var(--accent); color:#FFFFFF; }
+#sandbox { background:var(--line); font-size:14px; padding:6px 0; }
+h1, h2, h3 { font-family:var(--round); line-height:1.1; margin:0; }
+h1 { font-size:clamp(40px, 6.5vw, 72px); letter-spacing:-0.02em; }
+h2 { font-size:30px; margin-bottom:16px; }
+h3 { font-size:19px; }
+p { margin:0 0 14px; max-width:62ch; }
+.muted { color:var(--muted); }
+section { padding:28px 0 56px; }
+.hero { display:grid; grid-template-columns:1.15fr 0.85fr; gap:48px; align-items:center; padding-top:40px; }
+.lede { font-size:20px; margin:22px 0 28px; }
+.btn { display:inline-block; font:600 17px/1 var(--round); padding:15px 22px; border-radius:12px; border:2px solid var(--accent); background:var(--accent); color:#FFFFFF; text-decoration:none; cursor:pointer; }
+.btn.quiet { background:transparent; color:var(--accent); }
+.btn:disabled { opacity:0.5; cursor:default; }
+.receipt { position:relative; background:var(--surface); padding:26px 24px 30px; transform:rotate(1.5deg); }
+.receipt::after { content:""; position:absolute; left:0; right:0; top:100%; height:10px;
+  background:linear-gradient(135deg, var(--surface) 7px, transparent 0) 0 0/14px 10px repeat-x, linear-gradient(225deg, var(--surface) 7px, transparent 0) 0 0/14px 10px repeat-x; }
+.receipt h3 { text-align:center; padding-bottom:14px; border-bottom:2px dashed var(--line); margin-bottom:6px; }
+.rline { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
+.rline b { flex:0 0 58px; font-family:var(--round); }
+.total { display:flex; justify-content:space-between; font:700 22px/1 var(--round); padding-top:16px; font-variant-numeric:tabular-nums; }
+.stamp { position:absolute; right:20px; bottom:74px; font:700 24px/1 var(--round); color:var(--ok); border:3px solid var(--ok); border-radius:8px; padding:6px 12px; transform:rotate(-12deg); background:var(--surface); }
+@media (prefers-reduced-motion: no-preference) {
+  .receipt .rline, .receipt .total, .stamp { opacity:0; animation:show 0.35s ease-out forwards; }
+  .receipt .rline:nth-of-type(2) { animation-delay:0.6s; } .receipt .rline:nth-of-type(3) { animation-delay:1.2s; }
+  .receipt .total { animation-delay:1.8s; } .stamp { animation-delay:2.4s; }
+  .receipt .rline:nth-of-type(1) { animation-delay:0.1s; }
+  @keyframes show { to { opacity:1; } }
+}
+.steps { list-style:none; padding:0; margin:0; display:grid; grid-template-columns:repeat(3, 1fr); gap:28px; counter-reset:step; }
+.steps li { counter-increment:step; border-top:3px solid var(--accent); padding-top:14px; }
+.steps li::before { content:counter(step); color:var(--accent); font:700 34px/1 var(--round); display:block; margin-bottom:8px; }
+pre { background:var(--ink); color:var(--page); padding:18px 20px; border-radius:12px; overflow:auto; font-size:14px; line-height:1.5; margin:0 0 14px; }
+.panel { background:var(--surface); border-radius:16px; padding:24px; margin-bottom:20px; }
+.facts { display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:18px 28px; margin:0; }
+.facts dt { font-size:14px; color:var(--muted); }
+.facts dd { margin:2px 0 0; font:600 19px/1.3 var(--round); overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+.order { display:grid; grid-template-columns:1fr auto auto; gap:6px 20px; align-items:center; padding:14px 0; border-top:1px solid var(--line); }
+.order:first-child { border-top:0; }
+.order .amt { font:700 19px/1 var(--round); font-variant-numeric:tabular-nums; }
+.tag { font-size:14px; font-weight:600; padding:4px 10px; border-radius:999px; background:var(--accent); color:#FFFFFF; }
+.tag.paid { background:transparent; color:var(--ok); border:2px solid var(--ok); }
+.shelf { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:20px; }
+.item { background:var(--surface); border-radius:16px; padding:22px; display:flex; flex-direction:column; gap:6px; }
+.item .price { font:700 26px/1 var(--round); margin:8px 0 12px; font-variant-numeric:tabular-nums; }
+.item .btn { margin-top:auto; font-size:15px; padding:12px 14px; text-align:center; }
+.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+.chat { display:grid; grid-template-columns:minmax(0, 1fr) 320px; gap:32px; align-items:start; }
+.log { display:flex; flex-direction:column; gap:12px; min-height:280px; margin-bottom:16px; }
+.msg { max-width:85%; padding:12px 16px; border-radius:16px; background:var(--surface); white-space:pre-wrap; overflow-wrap:anywhere; }
+.msg.you { align-self:flex-end; background:var(--accent); color:#FFFFFF; }
+.step { max-width:85%; font-size:14px; color:var(--muted); border-left:3px solid var(--line); padding-left:12px; }
+.step summary { cursor:pointer; }
+.step pre { background:transparent; color:var(--muted); padding:8px 0 0; margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.step .btn { margin-top:8px; font-size:15px; padding:10px 14px; }
+.ask { display:flex; gap:10px; }
+.ask input { flex:1; min-width:0; font:inherit; padding:14px 16px; border:2px solid var(--line); border-radius:12px; color:var(--ink); }
+.chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.chips button { font:inherit; font-size:15px; padding:8px 14px; border-radius:999px; border:1px solid var(--line); background:var(--surface); color:var(--ink); cursor:pointer; }
+.side h3 { margin:20px 0 12px; }
+.side .facts { grid-template-columns:1fr; }
+.side .order { grid-template-columns:1fr auto; }
+.side .order .btn { grid-column:1 / -1; text-align:center; font-size:15px; padding:10px 14px; }
+.limit { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:14px; }
+.money { font:600 19px/1 var(--round); }
+.money input { font:inherit; width:120px; padding:12px; margin-left:4px; border:2px solid var(--line); border-radius:12px; color:var(--ink); }
+.note { border-left:4px solid var(--accent); padding:4px 0 4px 14px; margin:0 0 20px; }
+[hidden] { display:none !important; }
+@media (max-width: 760px) { .hero, .steps, .chat { grid-template-columns:1fr; } .receipt { transform:none; } .order { grid-template-columns:1fr auto; } }
+</style>
+</head>
+<body>
+<div id="sandbox" hidden><div class="wrap">Sandbox mode. No real money moves.</div></div>
+<header><div class="wrap">
+  <a class="brand" href="#/">Agentic PayPal</a>
+  <nav aria-label="Main">
+    <a href="#/">Chat</a><a href="#/dashboard">Dashboard</a><a href="#/store">Demo store</a><a href="#/setup">Set up</a><a href="#/about">About</a>
+  </nav>
+</div></header>
+<main class="wrap">
+
+<div id="view-chat">
+  <section class="chat">
+    <div>
+      <h2>Tell your agent what to buy</h2>
+      <p id="chat-note" class="note" hidden></p>
+      <div id="log" class="log" aria-live="polite"></div>
+      <form id="chat-form" class="ask">
+        <label class="sr" for="chat-input">Message to your agent</label>
+        <input id="chat-input" type="text" autocomplete="off" placeholder="Buy the stoneware mug from Fernhill Goods">
+        <button class="btn" type="submit">Send</button>
+      </form>
+      <div class="chips" id="chips"></div>
+    </div>
+    <aside class="side">
+      <div class="panel">
+        <dl class="facts">
+          <div><dt>Wallet balance</dt><dd id="c-balance"></dd></div>
+          <div><dt>Pays without asking up to</dt><dd id="c-limit"></dd></div>
+        </dl>
+        <p style="margin:14px 0 0"><a href="#/dashboard">Change the limit</a></p>
+      </div>
+      <h3>Waiting for your approval</h3>
+      <div class="panel" id="chat-waiting"></div>
+    </aside>
+  </section>
+</div>
+
+<div id="view-about" hidden>
+  <section class="hero">
+    <div>
+      <h1>Your agent shops. You approve. PayPal pays.</h1>
+      <p class="lede">Agentic PayPal lets Claude or Codex buy goods for you from any PayPal merchant. Small purchases are paid at once from a balance you fund in advance, up to a limit you set. Larger ones wait for your approval in PayPal.</p>
+      <a class="btn" href="#/setup">Set up your account</a>
+      <a class="btn quiet" href="#/store">See the demo store</a>
+    </div>
+    <div class="receipt" aria-label="Example purchase">
+      <h3>Fernhill Goods</h3>
+      <div class="rline"><b>You</b><span>Order the stoneware mug from Fernhill Goods.</span></div>
+      <div class="rline"><b>Agent</b><span>Order created. Approve it in PayPal.</span></div>
+      <div class="rline"><b>You</b><span>Approved.</span></div>
+      <div class="total"><span>Stoneware mug</span><span>$18.00</span></div>
+      <div class="stamp">Paid</div>
+    </div>
+  </section>
+  <section>
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><h3>Log in with PayPal</h3><p class="muted">Logging in links your PayPal account to your agent. Only that account can approve its purchases.</p></li>
+      <li><h3>Ask your agent to buy</h3><p class="muted">Name the item, or give the agent a goal and let it choose. Your limits apply either way.</p></li>
+      <li><h3>Approve only the big ones</h3><p class="muted">Purchases within your limit are paid at once from your balance. Larger ones wait for your approval in PayPal.</p></li>
+    </ol>
+  </section>
+  <section>
+    <h2>Add it to your agent</h2>
+    <p>Add this to your Claude Desktop configuration, with your own keys, then restart Claude.</p>
+<pre>{
+  "mcpServers": {
+    "agentic-paypal": {
+      "command": "node",
+      "args": ["/absolute/path/to/agentic-paypal/dist/index.js"],
+      "env": { "THIRDWEB_SECRET_KEY": "", "PAYPAL_CLIENT_ID": "", "PAYPAL_CLIENT_SECRET": "" }
+    }
+  }
+}</pre>
+  </section>
+</div>
+
+<div id="view-setup" hidden>
+  <section>
+    <h2>Set up</h2>
+    <div class="panel">
+      <h3>1. Log in with PayPal</h3>
+      <p id="setup-state" class="muted">Checking your account.</p>
+      <p id="setup-error" class="note" hidden></p>
+      <button class="btn" id="login" type="button">Log in with PayPal</button>
+    </div>
+    <div class="panel">
+      <h3>2. Add funds and set your limit</h3>
+      <p class="muted">Ask your agent: "Add $20 to my wallet with PayPal." Then choose on the dashboard how much it may spend without asking.</p>
+      <a class="btn quiet" href="#/dashboard">Set your limit</a>
+    </div>
+    <div class="panel">
+      <h3>3. Try a purchase</h3>
+      <p class="muted">Pick something from the demo store and ask your agent to buy it.</p>
+      <a class="btn quiet" href="#/store">Open the demo store</a>
+    </div>
+  </section>
+</div>
+
+<div id="view-dashboard" hidden>
+  <section>
+    <h2>Dashboard</h2>
+    <p id="dash-empty" class="note" hidden>No PayPal account is linked yet. <a href="#/setup">Set up your account</a> to start.</p>
+    <div class="panel" id="account" hidden>
+      <dl class="facts">
+        <div><dt>PayPal account</dt><dd id="f-email"></dd></div>
+        <div><dt>PayPal ID</dt><dd id="f-id"></dd></div>
+        <div><dt>Wallet balance</dt><dd id="f-balance"></dd></div>
+        <div><dt>Wallet address</dt><dd id="f-wallet" style="font-size:14px"></dd></div>
+      </dl>
+    </div>
+    <div class="panel" id="limit-panel" hidden>
+      <h3>Automatic payments</h3>
+      <p class="muted" id="limit-text"></p>
+      <form id="limit-form" class="limit">
+        <label for="limit-input">Pay without asking up to</label>
+        <span class="money">$<input id="limit-input" type="number" min="0" max="100000" step="0.01" inputmode="decimal" required></span>
+        <label for="daily-input">a purchase, and</label>
+        <span class="money">$<input id="daily-input" type="number" min="0" max="100000" step="0.01" inputmode="decimal" required></span>
+        <span>a day</span>
+        <button class="btn" type="submit">Save limits</button>
+      </form>
+      <p class="muted" id="limit-msg" hidden></p>
+    </div>
+    <h3 style="margin:28px 0 12px">Waiting for your approval</h3>
+    <div class="panel" id="waiting"></div>
+    <h3 style="margin:28px 0 12px">Paid</h3>
+    <div class="panel" id="paid"></div>
+  </section>
+</div>
+
+<div id="view-store" hidden>
+  <section>
+    <h2 id="store-name">Demo store</h2>
+    <p>A sample shop for trying the purchase flow. Pick something and ask the agent to buy it.</p>
+    <p id="store-note" class="note" hidden>The store has no merchant account yet, so orders cannot be placed. Set AGENTPAY_DEMO_MERCHANT to a PayPal sandbox business account and restart your agent.</p>
+    <div class="shelf" id="shelf"></div>
+  </section>
+</div>
+
+</main>
+<script>
+var VIEWS = ["chat", "dashboard", "store", "setup", "about"];
+var timer = null;
+
+function el(tag, cls, text) {
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function get(path) {
+  return fetch(path).then(function (r) { return r.json(); });
+}
+function isPaypalUrl(u) {
+  return typeof u === "string" && (u.indexOf("https://www.paypal.com/") === 0 || u.indexOf("https://www.sandbox.paypal.com/") === 0);
+}
+
+function showStatus(s) {
+  document.getElementById("sandbox").hidden = !s.sandbox;
+  var state = document.getElementById("setup-state");
+  var button = document.getElementById("login");
+  var err = document.getElementById("setup-error");
+  state.textContent = s.linked ? "Linked to " + (s.email || s.paypalId) + "." : "No PayPal account is linked yet.";
+  button.hidden = s.linked;
+  err.hidden = !s.loginError || s.linked;
+  err.textContent = s.loginError ? "The last login did not finish: " + s.loginError : "";
+  document.getElementById("dash-empty").hidden = s.linked;
+  document.getElementById("account").hidden = !s.linked;
+  document.getElementById("f-email").textContent = s.email || "Not shared";
+  document.getElementById("f-id").textContent = s.paypalId || "";
+  document.getElementById("f-balance").textContent = s.balance || "Unavailable";
+  document.getElementById("f-wallet").textContent = s.wallet || "";
+  document.getElementById("limit-panel").hidden = !s.linked;
+  var limit = Number(s.autoLimit) || 0;
+  var daily = Number(s.dailyLimit) || 0;
+  var spent = Number(s.spentToday) || 0;
+  document.getElementById("limit-text").textContent = limit > 0 && daily > 0
+    ? "Purchases up to $" + limit.toFixed(2) + " are paid from your wallet without asking, up to $" + daily.toFixed(2) + " a day. This covers what you ask for and what the agent chooses itself. Anything beyond needs your approval in PayPal. Paid automatically today: $" + spent.toFixed(2) + "."
+    : "Automatic payments are off. Every purchase needs your approval in PayPal.";
+  var input = document.getElementById("limit-input");
+  if (document.activeElement !== input) input.value = limit;
+  var dailyInput = document.getElementById("daily-input");
+  if (document.activeElement !== dailyInput) dailyInput.value = daily;
+  document.getElementById("c-balance").textContent = s.linked ? (s.balance || "Unavailable") : "Not set up";
+  document.getElementById("c-limit").textContent = limit > 0 && daily > 0 ? "$" + limit.toFixed(2) + " a purchase, $" + daily.toFixed(2) + " a day" : "Off";
+  var note = document.getElementById("chat-note");
+  note.hidden = s.chatReady && s.linked;
+  note.textContent = !s.chatReady
+    ? "The chat needs an AI model key. Set ANTHROPIC_API_KEY and restart your agent."
+    : "No PayPal account is linked yet. Ask the agent to set up your wallet.";
+}
+
+function orderRow(o) {
+  var row = el("div", "order");
+  var what = el("div");
+  what.appendChild(el("div", "", o.item));
+  var when = new Date(o.paidAt || o.createdAt).toLocaleString();
+  what.appendChild(el("div", "muted", (o.merchant ? o.merchant + ", " : "") + when));
+  if (o.decidedBy === "agent") what.appendChild(el("div", "muted", "Agent's choice: " + (o.reason || "no reason given")));
+  row.appendChild(what);
+  row.appendChild(el("div", "amt", "$" + o.amountUSD));
+  if (o.status === "paid") {
+    row.appendChild(el("span", "tag paid", o.auto ? "Paid automatically" : "Paid"));
+  } else if (isPaypalUrl(o.approveUrl)) {
+    var a = el("a", "btn", "Approve in PayPal");
+    a.href = o.approveUrl; a.target = "_blank"; a.rel = "noopener";
+    row.appendChild(a);
+  } else {
+    row.appendChild(el("span", "tag", "Waiting"));
+  }
+  return row;
+}
+function showOrders(orders) {
+  var groups = { waiting: [], paid: [] };
+  orders.forEach(function (o) { groups[o.status === "paid" ? "paid" : "waiting"].push(o); });
+  var empty = { waiting: "Nothing is waiting for you.", paid: "No purchases yet. Ask your agent to buy something from the demo store." };
+  Object.keys(groups).forEach(function (key) {
+    var box = document.getElementById(key);
+    box.textContent = "";
+    if (!groups[key].length) box.appendChild(el("p", "muted", empty[key]));
+    groups[key].forEach(function (o) { box.appendChild(orderRow(o)); });
+  });
+  var side = document.getElementById("chat-waiting");
+  side.textContent = "";
+  if (!groups.waiting.length) side.appendChild(el("p", "muted", empty.waiting));
+  groups.waiting.forEach(function (o) { side.appendChild(orderRow(o)); });
+}
+
+function showStore(store) {
+  document.getElementById("store-name").textContent = store.name;
+  document.getElementById("store-note").hidden = Boolean(store.merchant);
+  var shelf = document.getElementById("shelf");
+  shelf.textContent = "";
+  store.products.forEach(function (p) {
+    var card = el("div", "item");
+    card.appendChild(el("h3", "", p.name));
+    card.appendChild(el("div", "muted", p.description));
+    card.appendChild(el("div", "price", "$" + p.priceUSD));
+    var copy = el("button", "btn quiet", "Ask the agent to buy this");
+    copy.type = "button";
+    copy.addEventListener("click", function () {
+      location.hash = "#/";
+      var box = document.getElementById("chat-input");
+      box.value = "Buy the " + p.name + " from " + store.name + ".";
+      box.focus();
+    });
+    card.appendChild(copy);
+    shelf.appendChild(card);
+  });
+}
+
+function refresh(view) {
+  get("/api/status").then(showStatus).catch(function () {});
+  if (view === "dashboard" || view === "chat") get("/api/orders").then(showOrders).catch(function () {});
+  if (view === "store") get("/api/store").then(showStore).catch(function () {});
+}
+
+function route() {
+  var view = location.hash.replace("#/", "") || "chat";
+  if (VIEWS.indexOf(view) < 0) view = "chat";
+  document.body.setAttribute("data-view", view);
+  VIEWS.forEach(function (v) { document.getElementById("view-" + v).hidden = v !== view; });
+  document.querySelectorAll("nav a").forEach(function (a) {
+    if (a.getAttribute("href") === "#/" + (view === "chat" ? "" : view)) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
+  clearInterval(timer);
+  refresh(view);
+  if (view !== "about" && view !== "store") timer = setInterval(function () { refresh(view); }, 4000);
+  window.scrollTo(0, 0);
+}
+
+document.getElementById("login").addEventListener("click", function () {
+  var button = this;
+  button.disabled = true;
+  fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      button.disabled = false;
+      var err = document.getElementById("setup-error");
+      if (isPaypalUrl(d.url)) { window.open(d.url, "_blank", "noopener"); return; }
+      err.hidden = false;
+      err.textContent = "Could not start the PayPal login: " + (d.error || "no login link was returned") + ".";
+    })
+    .catch(function () { button.disabled = false; });
+});
+
+var talk = [];
+var log = document.getElementById("log");
+
+function paypalLink(text) {
+  var starts = ["https://www.sandbox.paypal.com/", "https://www.paypal.com/"];
+  for (var i = 0; i < starts.length; i++) {
+    var at = text.indexOf(starts[i]);
+    if (at >= 0) return text.slice(at).split(" ")[0].split(String.fromCharCode(10))[0];
+  }
+  return null;
+}
+function say(cls, text) {
+  var m = el("div", "msg " + cls, text);
+  log.appendChild(m);
+  m.scrollIntoView({ block: "nearest" });
+  return m;
+}
+function showStep(step) {
+  var d = el("details", "step");
+  d.appendChild(el("summary", "", "Used " + step.tool));
+  d.appendChild(el("pre", "", step.output));
+  var link = paypalLink(step.output);
+  if (link) {
+    var a = el("a", "btn", step.tool === "setup_wallet" ? "Log in with PayPal" : "Approve in PayPal");
+    a.href = link; a.target = "_blank"; a.rel = "noopener";
+    d.open = true;
+    d.appendChild(a);
+  }
+  log.appendChild(d);
+}
+function send(text) {
+  say("you", text);
+  talk.push({ role: "user", content: text });
+  var wait = say("agent", "Working on it.");
+  fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: talk }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      wait.remove();
+      if (d.error) { talk.pop(); say("agent", "That did not go through. " + d.error); return; }
+      d.steps.forEach(showStep);
+      say("agent", d.reply);
+      talk.push({ role: "assistant", content: d.reply });
+      refresh("chat");
+    })
+    .catch(function () { wait.remove(); talk.pop(); say("agent", "That did not go through. The server did not answer."); });
+}
+document.getElementById("chat-form").addEventListener("submit", function (event) {
+  event.preventDefault();
+  var box = document.getElementById("chat-input");
+  var text = box.value.trim();
+  if (!text) return;
+  box.value = "";
+  send(text);
+});
+["What is my balance?", "What can I buy?", "Add $20 to my wallet"].forEach(function (text) {
+  var chip = el("button", "", text);
+  chip.type = "button";
+  chip.addEventListener("click", function () { send(text); });
+  document.getElementById("chips").appendChild(chip);
+});
+
+document.getElementById("limit-form").addEventListener("submit", function (event) {
+  event.preventDefault();
+  var msg = document.getElementById("limit-msg");
+  var value = Number(document.getElementById("limit-input").value);
+  var day = Number(document.getElementById("daily-input").value);
+  fetch("/api/limit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limitUSD: value, dailyUSD: day }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      msg.hidden = false;
+      msg.textContent = d.error ? "Limits not saved. " + d.error : "Limits saved.";
+      document.getElementById("limit-input").blur();
+      refresh("dashboard");
+    })
+    .catch(function () { msg.hidden = false; msg.textContent = "Limit not saved. The server did not answer."; });
+});
+
+window.addEventListener("hashchange", route);
+route();
+</script>
+</body>
+</html>
