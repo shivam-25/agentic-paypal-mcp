@@ -2,11 +2,11 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { autoApproveLimit, setAutoApproveLimit } from "./autopay.js";
+import { autoApproveLimit, dailyAutoLimit, setAutoLimits } from "./autopay.js";
 import { chat, chatReady } from "./chat.js";
 import { DEMO_MERCHANT, PAYPAL_ENVIRONMENT, WEB_UI_PORT } from "./config.js";
 import { lastLoginError, startPaypalLogin } from "./login.js";
-import { PRODUCTS, STORE_NAME, loadOrders } from "./store.js";
+import { PRODUCTS, STORE_NAME, autoSpentToday, loadOrders } from "./store.js";
 import { loadWalletMeta, usdBalance } from "./wallet.js";
 
 /**
@@ -49,6 +49,8 @@ async function status() {
     wallet: meta?.address ?? null,
     balance,
     autoLimit: autoApproveLimit(),
+    dailyLimit: dailyAutoLimit(),
+    spentToday: autoSpentToday(),
     chatReady: chatReady(),
     loginError: lastLoginError(),
   };
@@ -80,15 +82,18 @@ export function startWebUi() {
           json(res, 200, await chat(JSON.parse(await readBody(req)).messages));
         }
       } else if (req.method === "POST" && path === "/api/limit") {
-        // Only the person at the browser sets the limit; there is no agent tool for it.
+        // Only the person at the browser sets the limits; there is no agent tool for them.
         if (!(req.headers["content-type"] ?? "").startsWith("application/json")) {
           json(res, 415, { error: "Send JSON." });
         } else {
-          const limit = Number(JSON.parse(await readBody(req)).limitUSD);
-          if (!Number.isFinite(limit) || limit < 0 || limit > 100000) {
-            json(res, 400, { error: "Enter an amount between 0 and 100,000." });
+          const body = JSON.parse(await readBody(req));
+          const limit = Number(body.limitUSD);
+          const daily = Number(body.dailyUSD);
+          const valid = (n: number) => Number.isFinite(n) && n >= 0 && n <= 100000;
+          if (!valid(limit) || !valid(daily)) {
+            json(res, 400, { error: "Enter amounts between 0 and 100,000." });
           } else {
-            json(res, 200, { autoLimit: setAutoApproveLimit(limit) });
+            json(res, 200, setAutoLimits(limit, daily));
           }
         }
       } else if (req.method === "POST" && path === "/api/login") {
