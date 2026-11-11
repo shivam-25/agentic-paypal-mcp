@@ -55,6 +55,12 @@ Purchases come in two kinds, split by a limit the user sets:
 
 The limit starts at $10. The user changes it on the dashboard, to any amount from $0 (off) up to $100,000. There is deliberately no agent tool that changes the limit, so an agent cannot raise its own spending limit. A purchase the wallet balance cannot cover goes to PayPal for approval.
 
+There is also a daily total, which starts at $50 and is set in the same place. Once the day's automatic payments would pass it, further purchases go to PayPal for approval.
+
+### Purchases the agent chooses itself
+
+The agent can buy what the user names, and it can also choose what to buy for a task or goal the user gave it. The same limits apply to both. When the agent chooses, it calls `buy_with_paypal` with `decidedBy: "agent"` and a `reason`, and the dashboard shows that purchase as the agent's choice with its reason. This label is for the user's visibility. It is reported by the agent, so the limits, not the label, are what bound the spending.
+
 Automatic payments need `AGENTPAY_TREASURY_ADDRESS` set and Payouts enabled on the PayPal app.
 
 ## Web interface
