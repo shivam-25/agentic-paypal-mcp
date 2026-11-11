@@ -15,7 +15,8 @@ import { payForService } from "./x402.js";
 import { createOrder, captureOrder, getOrder } from "./paypal.js";
 import { disburse, treasuryConfigured } from "./treasury.js";
 import { lastLoginError, startPaypalLogin } from "./login.js";
-import { PRODUCTS, STORE_NAME, markOrderPaid, recordOrder } from "./store.js";
+import { PRODUCTS, STORE_NAME, markOrderPaid, recordAutoPaidOrder, recordOrder } from "./store.js";
+import { autoApproveLimit, autoPay, canAutoPay } from "./autopay.js";
 import { WEB_UI_URL, startWebUi } from "./web.js";
 
 /**
@@ -97,7 +98,7 @@ server.tool(
 // ── buy_with_paypal ──────────────────────────────────────────────────────────
 server.tool(
   "buy_with_paypal",
-  "Buy goods from a merchant with the user's PayPal account. Returns a PayPal approval link for the user; then call confirm_purchase with the orderId.",
+  "Buy goods from a merchant. A purchase within the user's automatic limit is paid at once from the wallet. A larger one returns a PayPal approval link for the user; then call confirm_purchase with the orderId.",
   {
     merchant: z
       .string()
@@ -112,6 +113,31 @@ server.tool(
     if (!unit) return text(`"${priceUSD}" is not a valid USD price.`);
     const qty = quantity ?? 1;
     const total = (Number(unit) * qty).toFixed(2);
+    const auto = await canAutoPay(total).catch((e: any) => ({
+      ok: false as const,
+      reason: `the wallet could not be checked (${e?.message ?? String(e)}).`,
+    }));
+    if (auto.ok) {
+      try {
+        const paid = await autoPay(merchant, total, `${qty} × ${item}`);
+        recordAutoPaidOrder({
+          id: paid.payoutId,
+          kind: "purchase",
+          item: `${qty} × ${item}`,
+          merchant,
+          amountUSD: total,
+        });
+        return text(
+          [
+            `✅ Paid automatically: ${qty} × ${item} from ${merchant} — $${total} USD from the wallet.`,
+            `It was within the user's $${autoApproveLimit().toFixed(2)} automatic limit, so no approval was needed.`,
+            `PayPal payout ${paid.payoutId}.`,
+          ].join("\n"),
+        );
+      } catch (e: any) {
+        return text(`Automatic payment failed: ${e?.message ?? String(e)}`);
+      }
+    }
     try {
       const order = await createOrder(total, `${item} ×${qty}`, {
         payee: merchant.includes("@") ? { email: merchant } : { merchantId: merchant },
@@ -131,6 +157,7 @@ server.tool(
           `🛒 Order created: ${qty} × ${item} from ${merchant} — $${total} USD.`,
           `Order: ${order.id} (status: ${order.status})`,
           ``,
+          `It needs the user's approval because ${auto.reason}`,
           `Ask the user to approve the purchase here:`,
           order.approveUrl ?? "(no approval link returned)",
           ``,
