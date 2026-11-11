@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { randomBytes } from "node:crypto";
-import { BRAND_NAME, PAYPAL_LOGIN_PATH, PAYPAL_LOGIN_PORT } from "./config.js";
+import { BRAND_NAME, PAYPAL_LOGIN_PATH, PAYPAL_LOGIN_PORT, WEB_UI_PORT } from "./config.js";
 import { paypalIdentityFromCode, paypalLoginUrl } from "./paypal.js";
 import { getOrCreateWallet } from "./wallet.js";
 
@@ -28,7 +28,11 @@ function stopListener() {
 }
 
 function page(title: string, body: string): string {
-  return `<!doctype html><meta charset="utf-8"><title>${BRAND_NAME}</title><body style="font-family:system-ui;max-width:32rem;margin:4rem auto"><h1>${title}</h1><p>${body}</p></body>`;
+  return `<!doctype html><meta charset="utf-8"><title>${BRAND_NAME}</title><body style="font-family:system-ui;max-width:40rem;margin:4rem auto;line-height:1.5;overflow-wrap:anywhere"><h1>${title}</h1><p>${body}</p></body>`;
+}
+
+function esc(s: string): string {
+  return s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
 /** The error from the most recent login attempt, if it failed. */
@@ -57,8 +61,13 @@ export async function startPaypalLogin(): Promise<string> {
       const code = reqUrl.searchParams.get("code");
       if (!code) throw new Error("PayPal login was cancelled.");
       const identity = await paypalIdentityFromCode(code);
-      await getOrCreateWallet(identity);
-      res.end(page("PayPal account linked", "You can close this tab and return to your agent."));
+      const wallet = await getOrCreateWallet(identity);
+      res.end(
+        page(
+          "PayPal account linked. Wallet ready.",
+          `Your agent's wallet <b>${esc(wallet.address)}</b> is now linked to the PayPal account <b>${esc(identity.email ?? identity.payerId)}</b> (PayPal ID ${esc(identity.payerId)}). Only this PayPal account can fund the wallet or approve its purchases.</p><p><a href="http://127.0.0.1:${WEB_UI_PORT}/#/dashboard">Open your dashboard</a>`,
+        ),
+      );
     } catch (e: any) {
       lastError = e?.message ?? String(e);
       res.end(page("Could not link PayPal", "Return to your agent and try again."));
