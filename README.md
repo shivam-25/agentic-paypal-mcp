@@ -61,12 +61,15 @@ Automatic payments need `AGENTPAY_TREASURY_ADDRESS` set and Payouts enabled on t
 
 While the server runs, it serves a web interface at `http://127.0.0.1:8766`, on your machine only:
 
-- **Home**: what Agentic PayPal is and how to add it to your agent.
+- **Chat**: the main screen. Tell the agent what to buy. Approval buttons, your balance and your limit sit beside the conversation.
 - **Set up**: log in with PayPal from the browser.
+- **About**: what Agentic PayPal is and how to add it to your own agent.
 - **Dashboard**: the linked PayPal account, wallet balance, purchases waiting for your approval, and purchases paid.
 - **Demo store**: a sample shop, Fernhill Goods, for trying the purchase flow.
 
 The page is one file, `web/index.html`, with no dependencies and no build step.
+
+The chat runs an AI model with the same tools the MCP server offers, so it works without Claude Desktop or Codex. It needs `ANTHROPIC_API_KEY`, and your messages are sent to the model provider's API.
 
 ## Two payment rails
 
@@ -91,6 +94,7 @@ Environment variables:
 - *(optional)* `AGENTPAY_LOGIN_PORT`: local port for the PayPal login return. Defaults to `8765`.
 - *(optional)* `AGENTPAY_UI_PORT`: local port for the web interface. Defaults to `8766`.
 - *(optional)* `AGENTPAY_DEMO_MERCHANT`: the PayPal sandbox business account the demo store pays. The store cannot take orders without it.
+- *(optional)* `ANTHROPIC_API_KEY`: turns on the chat console. `AGENTPAY_CHAT_MODEL` picks the model.
 - *(optional)* `AGENTPAY_TREASURY_ADDRESS`: a thirdweb server wallet holding test USD, used to credit agent wallets when a PayPal top-up is captured.
 
 ### Enable Log in with PayPal
@@ -140,6 +144,7 @@ node --env-file=.env dist/selftest.js
 - ⬜ Merchant purchases with `buy_with_paypal` (written, not yet run against the sandbox)
 - ⬜ Web interface (checked locally with sample data, not yet run with live PayPal data)
 - ⬜ Automatic payments within the limit (limit logic tested locally with PayPal stubbed, not yet run against the sandbox)
+- ⬜ Chat console (tested locally with the AI model and PayPal stubbed, not yet run with a real model key)
 - ⬜ funded green run (send test USD to the wallet)
 
 Automatic payments are paid by this app's PayPal account, not the buyer's, so PayPal buyer protection does not cover them. Check the rules for holding and paying out customer funds before using this with real money.
