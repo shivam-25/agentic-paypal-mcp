@@ -2,12 +2,21 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { BRAND_NAME, DEFAULT_CHAIN_ID, ONBOARD_UI_BASE, toUSD, usdToBaseUnits } from "./config.js";
+import {
+  BRAND_NAME,
+  DEFAULT_CHAIN_ID,
+  DEMO_MERCHANT,
+  ONBOARD_UI_BASE,
+  toUSD,
+  usdToBaseUnits,
+} from "./config.js";
 import { loadWalletMeta, usdBalance, gasBalance, type WalletMeta } from "./wallet.js";
 import { payForService } from "./x402.js";
 import { createOrder, captureOrder, getOrder } from "./paypal.js";
 import { disburse, treasuryConfigured } from "./treasury.js";
 import { lastLoginError, startPaypalLogin } from "./login.js";
+import { PRODUCTS, STORE_NAME, markOrderPaid, recordOrder } from "./store.js";
+import { WEB_UI_URL, startWebUi } from "./web.js";
 
 /**
  * Agentic PayPal — an MCP server that lets the host agent (Claude, Codex, …)
@@ -58,6 +67,7 @@ server.tool(
           `Wallet: ${meta.address}`,
           `Balance: ${usd} USD`,
           ``,
+          `Dashboard: ${WEB_UI_URL}/#/dashboard`,
           `Manage funds: ${setupUrl}`,
           ``,
           `You can now buy goods with buy_with_paypal.`,
@@ -108,6 +118,14 @@ server.tool(
         item: { name: item, quantity: qty, unitAmountUSD: unit },
         customId: PURCHASE_TAG,
       });
+      recordOrder({
+        id: order.id,
+        kind: "purchase",
+        item: `${qty} × ${item}`,
+        merchant,
+        amountUSD: total,
+        approveUrl: order.approveUrl,
+      });
       return text(
         [
           `🛒 Order created: ${qty} × ${item} from ${merchant} — $${total} USD.`,
@@ -150,12 +168,37 @@ server.tool(
         );
       }
       const cap = await captureOrder(orderId);
+      markOrderPaid(orderId);
       return text(
         `✅ Paid: $${cap.amountUSD} USD to the merchant (PayPal capture ${cap.captureId}).`,
       );
     } catch (e: any) {
       return text(`Purchase failed: ${e?.message ?? String(e)}`);
     }
+  },
+);
+
+// ── browse_store ──
+server.tool(
+  "browse_store",
+  "List the goods in the demo store, with prices and the merchant to pay. Pass a product's name, price and the merchant to buy_with_paypal to buy it.",
+  {},
+  async () => {
+    if (!DEMO_MERCHANT) {
+      return text(
+        "The demo store has no merchant yet. Set AGENTPAY_DEMO_MERCHANT to a PayPal sandbox business account.",
+      );
+    }
+    const lines = PRODUCTS.map((p) => `• ${p.name} — $${p.priceUSD} — ${p.description}`);
+    return text(
+      [
+        `${STORE_NAME} (merchant: ${DEMO_MERCHANT})`,
+        ``,
+        ...lines,
+        ``,
+        `See the store: ${WEB_UI_URL}/#/store`,
+      ].join("\n"),
+    );
   },
 );
 
@@ -186,6 +229,13 @@ server.tool(
     if (!amount) return text(`"${amountUSD}" is not a valid USD amount.`);
     const order = await createOrder(amount, `${BRAND_NAME} top-up for ${meta.address}`, {
       customId: topUpTag(meta.address),
+    });
+    recordOrder({
+      id: order.id,
+      kind: "topup",
+      item: "Wallet top-up",
+      amountUSD: amount,
+      approveUrl: order.approveUrl,
     });
     return text(
       [
@@ -225,6 +275,7 @@ server.tool(
       );
     }
     const cap = await captureOrder(orderId);
+    markOrderPaid(orderId);
 
     // On-ramp bridge: credit the agent wallet with on-chain USD for the captured amount.
     let creditLine = "";
@@ -323,6 +374,7 @@ server.tool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  startWebUi();
   console.error("Agentic PayPal MCP server running on stdio");
 }
 
