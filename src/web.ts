@@ -4,7 +4,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { autoApproveLimit, dailyAutoLimit, setAutoLimits } from "./autopay.js";
 import { chat, chatReady } from "./chat.js";
-import { DEMO_MERCHANT, PAYPAL_ENVIRONMENT, WEB_UI_PORT } from "./config.js";
+import { addStanding, loadStanding, removeStanding, startStanding } from "./standing.js";
+import {
+  DEFAULT_CHAIN_ID,
+  DEFAULT_USD_ASSET,
+  DEMO_MERCHANT,
+  PAYPAL_ENVIRONMENT,
+  WEB_UI_PORT,
+} from "./config.js";
 import { lastLoginError, startPaypalLogin } from "./login.js";
 import { PRODUCTS, STORE_NAME, autoSpentToday, loadOrders } from "./store.js";
 import { loadWalletMeta, usdBalance } from "./wallet.js";
@@ -52,12 +59,15 @@ async function status() {
     dailyLimit: dailyAutoLimit(),
     spentToday: autoSpentToday(),
     chatReady: chatReady(),
+    chainId: DEFAULT_CHAIN_ID,
+    asset: DEFAULT_USD_ASSET,
     loginError: lastLoginError(),
   };
 }
 
 /** Start the web interface. Safe to call when the port is taken: it logs and moves on. */
 export function startWebUi() {
+  startStanding();
   const server = createServer(async (req, res) => {
     // Only answer requests addressed to this machine, so no other site can read the API.
     if (!ALLOWED_HOSTS.has(req.headers.host ?? "")) {
@@ -75,6 +85,18 @@ export function startWebUi() {
         json(res, 200, loadOrders());
       } else if (req.method === "GET" && path === "/api/store") {
         json(res, 200, { name: STORE_NAME, merchant: DEMO_MERCHANT || null, products: PRODUCTS });
+      } else if (req.method === "GET" && path === "/api/standing") {
+        json(res, 200, loadStanding());
+      } else if (req.method === "POST" && path.startsWith("/api/standing")) {
+        // Standing instructions are set by the person at the browser, never by the agent.
+        if (!(req.headers["content-type"] ?? "").startsWith("application/json")) {
+          json(res, 415, { error: "Send JSON." });
+        } else {
+          const body = JSON.parse(await readBody(req));
+          if (path === "/api/standing/remove") removeStanding(String(body.id));
+          else addStanding(String(body.text ?? ""), Number(body.everyHours));
+          json(res, 200, loadStanding());
+        }
       } else if (req.method === "POST" && path === "/api/chat") {
         if (!(req.headers["content-type"] ?? "").startsWith("application/json")) {
           json(res, 415, { error: "Send JSON." });
