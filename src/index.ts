@@ -2,57 +2,160 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { DEFAULT_CHAIN_ID, ONBOARD_UI_BASE, toUSD, usdToBaseUnits } from "./config.js";
-import { getOrCreateWallet, loadWalletMeta, usdBalance, gasBalance } from "./wallet.js";
+import { BRAND_NAME, DEFAULT_CHAIN_ID, ONBOARD_UI_BASE, toUSD, usdToBaseUnits } from "./config.js";
+import { loadWalletMeta, usdBalance, gasBalance, type WalletMeta } from "./wallet.js";
 import { payForService } from "./x402.js";
 import { createOrder, captureOrder, getOrder } from "./paypal.js";
 import { disburse, treasuryConfigured } from "./treasury.js";
+import { lastLoginError, startPaypalLogin } from "./login.js";
 
 /**
- * AgentPay — an MCP server that gives the host agent (Claude, Codex, …) a
- * wallet and the ability to pay for services. Two rails:
- *   • crypto  — x402 (pays any HTTP 402 service automatically)
- *   • PayPal  — fund the wallet, or pay a PayPal order
- * All amounts are shown in USD.
+ * Agentic PayPal — an MCP server that lets the host agent (Claude, Codex, …)
+ * buy goods for the user with PayPal.
+ *   • PayPal — log in, buy goods from merchants, top up the agent wallet
+ *   • x402   — pay HTTP 402 digital services from the agent wallet
+ * The wallet is linked to the user's PayPal account. All amounts are in USD.
  */
 
-const server = new McpServer({ name: "agentpay", version: "0.1.0" });
+const server = new McpServer({ name: "agentic-paypal", version: "0.1.0" });
+
+// Tags stored on PayPal orders so a purchase can never be captured as a top-up.
+const PURCHASE_TAG = "purchase";
+const topUpTag = (address: string) => `topup:${address}`;
+
+const NOT_LINKED = "No PayPal account linked yet. Call setup_wallet first.";
 
 function text(s: string) {
   return { content: [{ type: "text" as const, text: s }] };
 }
 
+/** The wallet, only if it has been linked to a PayPal account. */
+function linkedWallet(): (WalletMeta & { paypalPayerId: string }) | null {
+  const meta = loadWalletMeta();
+  return meta?.paypalPayerId ? (meta as WalletMeta & { paypalPayerId: string }) : null;
+}
+
+/** Normalise "$1,234.5" → "1234.50". Returns null if it isn't a positive amount. */
+function cleanUSD(amount: string): string | null {
+  const n = Number(amount.replace(/[$,\s]/g, ""));
+  return Number.isFinite(n) && n > 0 ? n.toFixed(2) : null;
+}
+
 // ── setup_wallet ────────────────────────────────────────────────────────────
 server.tool(
   "setup_wallet",
-  "Create (or load) the agent's wallet from the user's email. Call this first. Returns the wallet address, USD balance, and a setup link.",
-  {
-    email: z
-      .string()
-      .email()
-      .optional()
-      .describe("The user's email. The wallet is created for and claimable by this email."),
+  "Link the user's PayPal account and create the agent's wallet. Call this first. Returns a PayPal login link; after the user logs in, call it again to confirm.",
+  {},
+  async () => {
+    const meta = linkedWallet();
+    if (meta) {
+      const { usd } = await usdBalance(meta.address).catch(() => ({ usd: "$0.00" }));
+      const setupUrl = `${ONBOARD_UI_BASE}?addr=${meta.address}`;
+      return text(
+        [
+          `✅ ${BRAND_NAME} is ready${meta.email ? ` for ${meta.email}` : ""}.`,
+          `Linked PayPal account: ${meta.paypalPayerId}`,
+          `Wallet: ${meta.address}`,
+          `Balance: ${usd} USD`,
+          ``,
+          `Manage funds: ${setupUrl}`,
+          ``,
+          `You can now buy goods with buy_with_paypal.`,
+        ].join("\n"),
+      );
+    }
+    try {
+      const failed = lastLoginError();
+      const url = await startPaypalLogin();
+      return text(
+        [
+          failed ? `The last login attempt failed: ${failed}\n` : ``,
+          `Ask the user to log in with PayPal here (link valid for 10 minutes):`,
+          url,
+          ``,
+          `After they log in, call setup_wallet again to confirm the account is linked.`,
+        ]
+          .filter((l, i) => i > 0 || l)
+          .join("\n"),
+      );
+    } catch (e: any) {
+      return text(`Could not start PayPal login: ${e?.message ?? String(e)}`);
+    }
   },
-  async ({ email }) => {
-    const meta = await getOrCreateWallet(email);
-    const { usd } = await usdBalance(meta.address).catch(() => ({ usd: "$0.00" }));
-    const setupUrl = `${ONBOARD_UI_BASE}?addr=${meta.address}${
-      meta.email ? `&email=${encodeURIComponent(meta.email)}` : ""
-    }`;
-    return text(
-      [
-        `✅ Agent wallet ready${meta.email ? ` for ${meta.email}` : ""}.`,
-        `Address: ${meta.address}`,
-        `Balance: ${usd} USD`,
-        ``,
-        `Open the setup page to claim it and manage funds:`,
-        setupUrl,
-        ``,
-        usd === "$0.00"
-          ? `To add funds, call fund_with_paypal with an amount in USD (PayPal is the default).`
-          : `You can now pay for services with pay_for_service.`,
-      ].join("\n"),
-    );
+);
+
+// ── buy_with_paypal ──────────────────────────────────────────────────────────
+server.tool(
+  "buy_with_paypal",
+  "Buy goods from a merchant with the user's PayPal account. Returns a PayPal approval link for the user; then call confirm_purchase with the orderId.",
+  {
+    merchant: z
+      .string()
+      .describe("The merchant's PayPal email address or PayPal merchant ID."),
+    item: z.string().describe("What is being bought, as it should appear on the PayPal receipt."),
+    priceUSD: z.string().describe('Price per item in USD, e.g. "24.99".'),
+    quantity: z.number().int().min(1).max(99).optional().describe("How many. Defaults to 1."),
+  },
+  async ({ merchant, item, priceUSD, quantity }) => {
+    if (!linkedWallet()) return text(NOT_LINKED);
+    const unit = cleanUSD(priceUSD);
+    if (!unit) return text(`"${priceUSD}" is not a valid USD price.`);
+    const qty = quantity ?? 1;
+    const total = (Number(unit) * qty).toFixed(2);
+    try {
+      const order = await createOrder(total, `${item} ×${qty}`, {
+        payee: merchant.includes("@") ? { email: merchant } : { merchantId: merchant },
+        item: { name: item, quantity: qty, unitAmountUSD: unit },
+        customId: PURCHASE_TAG,
+      });
+      return text(
+        [
+          `🛒 Order created: ${qty} × ${item} from ${merchant} — $${total} USD.`,
+          `Order: ${order.id} (status: ${order.status})`,
+          ``,
+          `Ask the user to approve the purchase here:`,
+          order.approveUrl ?? "(no approval link returned)",
+          ``,
+          `After they approve, call confirm_purchase with orderId "${order.id}".`,
+        ].join("\n"),
+      );
+    } catch (e: any) {
+      return text(`Could not create the order: ${e?.message ?? String(e)}`);
+    }
+  },
+);
+
+// ── confirm_purchase ─────────────────────────────────────────────────────────
+server.tool(
+  "confirm_purchase",
+  "Complete a purchase the user has approved in PayPal, paying the merchant. Returns the receipt.",
+  { orderId: z.string() },
+  async ({ orderId }) => {
+    const meta = linkedWallet();
+    if (!meta) return text(NOT_LINKED);
+    try {
+      const current = await getOrder(orderId);
+      if (current.customId !== PURCHASE_TAG) {
+        return text(`Order ${orderId} is not a purchase created by buy_with_paypal.`);
+      }
+      if (current.status === "COMPLETED") return text(`Order ${orderId} is already paid.`);
+      if (current.status !== "APPROVED") {
+        return text(
+          `Order ${orderId} is "${current.status}". Ask the user to finish approving it, then try again.`,
+        );
+      }
+      if (current.payerId !== meta.paypalPayerId) {
+        return text(
+          `Order ${orderId} was approved by a different PayPal account than the one linked to this wallet. Not paid.`,
+        );
+      }
+      const cap = await captureOrder(orderId);
+      return text(
+        `✅ Paid: $${cap.amountUSD} USD to the merchant (PayPal capture ${cap.captureId}).`,
+      );
+    } catch (e: any) {
+      return text(`Purchase failed: ${e?.message ?? String(e)}`);
+    }
   },
 );
 
@@ -74,17 +177,19 @@ server.tool(
 // ── fund_with_paypal ─────────────────────────────────────────────────────────
 server.tool(
   "fund_with_paypal",
-  "Top up the agent wallet with USD using PayPal. Returns an approval link for the user to complete payment; then call confirm_funding with the orderId.",
+  "Top up the agent wallet with USD from the linked PayPal account. Returns an approval link for the user to complete payment; then call confirm_funding with the orderId.",
   { amountUSD: z.string().describe('Amount in USD, e.g. "5.00".') },
   async ({ amountUSD }) => {
-    const meta = await getOrCreateWallet();
-    const order = await createOrder(
-      Number(amountUSD.replace(/[$,\s]/g, "")).toFixed(2),
-      `AgentPay top-up for ${meta.address}`,
-    );
+    const meta = linkedWallet();
+    if (!meta) return text(NOT_LINKED);
+    const amount = cleanUSD(amountUSD);
+    if (!amount) return text(`"${amountUSD}" is not a valid USD amount.`);
+    const order = await createOrder(amount, `${BRAND_NAME} top-up for ${meta.address}`, {
+      customId: topUpTag(meta.address),
+    });
     return text(
       [
-        `💳 PayPal top-up created for ${toUSD(usdToBaseUnits(amountUSD))} USD.`,
+        `💳 PayPal top-up created for ${toUSD(usdToBaseUnits(amount))} USD.`,
         `Order: ${order.id} (status: ${order.status})`,
         ``,
         `Ask the user to approve the payment here:`,
@@ -102,19 +207,28 @@ server.tool(
   "Capture a PayPal top-up the user has approved, crediting the agent wallet in USD.",
   { orderId: z.string() },
   async ({ orderId }) => {
+    const meta = linkedWallet();
+    if (!meta) return text(NOT_LINKED);
     const current = await getOrder(orderId);
+    if (current.customId !== topUpTag(meta.address)) {
+      return text(`Order ${orderId} is not a top-up for this wallet.`);
+    }
     if (current.status !== "APPROVED" && current.status !== "COMPLETED") {
       return text(
         `Order ${orderId} is "${current.status}". Ask the user to finish approving it, then try again.`,
       );
     }
     if (current.status === "COMPLETED") return text(`Order ${orderId} already captured. Funds credited.`);
+    if (current.payerId !== meta.paypalPayerId) {
+      return text(
+        `Order ${orderId} was approved by a different PayPal account than the one linked to this wallet. Not captured.`,
+      );
+    }
     const cap = await captureOrder(orderId);
 
     // On-ramp bridge: credit the agent wallet with on-chain USD for the captured amount.
-    const meta = loadWalletMeta();
     let creditLine = "";
-    if (meta && cap.amountUSD) {
+    if (cap.amountUSD) {
       if (treasuryConfigured()) {
         try {
           const d = await disburse(meta.address, cap.amountUSD);
@@ -160,7 +274,7 @@ const CATALOGUE = [
   {
     id: "book",
     title: '"Agentic Payments" — Chapter 1',
-    vendor: "AgentPay Press",
+    vendor: "Agentic PayPal Press",
     priceUSD: "$0.001",
     url: `${MARKET_BASE}/api/book`,
   },
@@ -168,7 +282,7 @@ const CATALOGUE = [
 
 server.tool(
   "browse_market",
-  "List the services the agent can buy, with their USD price and URL. Pass a URL from here to pay_for_service to purchase one.",
+  "List the digital services the agent can buy from its wallet balance, with their USD price and URL. Pass a URL from here to pay_for_service. For physical goods from a merchant, use buy_with_paypal instead.",
   {},
   async () => {
     const lines = CATALOGUE.map(
@@ -181,7 +295,7 @@ server.tool(
 // ── pay_for_service ──────────────────────────────────────────────────────────
 server.tool(
   "pay_for_service",
-  "Fetch a URL and, if it requires payment (HTTP 402), pay for it automatically from the agent wallet, then return the unlocked content. Works with any x402-compatible service on any chain.",
+  "Fetch a URL and, if it requires payment (HTTP 402), pay for it automatically from the agent wallet, then return the unlocked content. For digital services; works with any x402-compatible service on any chain.",
   {
     url: z.string().describe("The service URL to call."),
     maxUSD: z.string().optional().describe('Spending cap for this call, e.g. "0.10".'),
@@ -209,7 +323,7 @@ server.tool(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("AgentPay MCP server running on stdio");
+  console.error("Agentic PayPal MCP server running on stdio");
 }
 
 main().catch((e) => {
