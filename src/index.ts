@@ -17,6 +17,7 @@ import { disburse, treasuryConfigured } from "./treasury.js";
 import { lastLoginError, startPaypalLogin } from "./login.js";
 import { PRODUCTS, STORE_NAME, markOrderPaid, recordAutoPaidOrder, recordOrder } from "./store.js";
 import { autoApproveLimit, autoPay, canAutoPay } from "./autopay.js";
+import { TOOLS } from "./registry.js";
 import { WEB_UI_URL, startWebUi } from "./web.js";
 
 /**
@@ -28,6 +29,14 @@ import { WEB_UI_URL, startWebUi } from "./web.js";
  */
 
 const server = new McpServer({ name: "agentic-paypal", version: "0.1.0" });
+
+// Keep every tool's handler by name as it is registered, so the chat console
+// in the web interface can run the same tools.
+const registerTool = server.tool.bind(server) as (...args: any[]) => unknown;
+(server as any).tool = (name: string, ...rest: any[]) => {
+  TOOLS.set(name, rest[rest.length - 1]);
+  return registerTool(name, ...rest);
+};
 
 // Tags stored on PayPal orders so a purchase can never be captured as a top-up.
 const PURCHASE_TAG = "purchase";
