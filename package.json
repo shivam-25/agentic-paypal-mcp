@@ -1,10 +1,10 @@
 {
-  "name": "agentpay-mcp",
+  "name": "agentic-paypal",
   "version": "0.1.0",
-  "description": "Give any AI agent a wallet and the ability to pay for services — x402 crypto (USDC) + PayPal — over MCP. Add it to Claude or Codex, fund once, and your agent pays autonomously.",
+  "description": "Agentic PayPal: let any AI agent buy goods for you with PayPal, over MCP. Add it to Claude or Codex, log in with PayPal, and your agent shops from merchants in USD.",
   "type": "module",
   "bin": {
-    "agentpay-mcp": "dist/index.js"
+    "agentic-paypal": "dist/index.js"
   },
   "files": [
     "dist"
