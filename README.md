@@ -63,11 +63,17 @@ The agent can buy what the user names, and it can also choose what to buy for a 
 
 Automatic payments need `AGENTPAY_TREASURY_ADDRESS` set and Payouts enabled on the PayPal app.
 
+### Standing instructions
+
+The user can also set standing instructions on the dashboard, such as "Keep coffee stocked", to run every day or every week. A timer in the server runs each one when it is due, through the same agent and tools as the chat console, with nobody prompting it. The limits apply as usual, and anything beyond them waits for approval. Standing instructions need the AI model key. They are set in the web interface only, never by the agent.
+
 ## Web interface
 
 While the server runs, it serves a web interface at `http://127.0.0.1:8766`, on your machine only:
 
 - **Chat**: the main screen. Tell the agent what to buy. Approval buttons, your balance and your limit sit beside the conversation.
+- **Wallet**: the agent's wallet, with its balance, address, linked PayPal account, and the money in and out.
+- **Merchant**: what the demo store received and how each order was paid, built from the agent's order log.
 - **Set up**: log in with PayPal from the browser.
 - **About**: what Agentic PayPal is and how to add it to your own agent.
 - **Dashboard**: the linked PayPal account, wallet balance, purchases waiting for your approval, and purchases paid.
