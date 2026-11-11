@@ -39,11 +39,23 @@ The wallet belongs to one PayPal account, and the server enforces it:
 | `setup_wallet` | Log in with PayPal, link the account, create the agent wallet. |
 | `buy_with_paypal` | Create an order for goods from a merchant; returns a PayPal approval link. |
 | `confirm_purchase` | Pay the merchant once the user has approved the order. |
+| `browse_store` | List the goods in the demo store, with prices and the merchant to pay. |
 | `get_balance` | Show the wallet's available USD balance. |
 | `fund_with_paypal` | Create a PayPal order to top up the wallet; returns an approval link. |
 | `confirm_funding` | Capture the approved top-up and credit the wallet in USD. |
 | `browse_market` | List digital services the wallet can pay for. |
 | `pay_for_service` | Call a URL; on HTTP 402, pay from the wallet and return the content. |
+
+## Web interface
+
+While the server runs, it serves a web interface at `http://127.0.0.1:8766`, on your machine only:
+
+- **Home**: what Agentic PayPal is and how to add it to your agent.
+- **Set up**: log in with PayPal from the browser.
+- **Dashboard**: the linked PayPal account, wallet balance, purchases waiting for your approval, and purchases paid.
+- **Demo store**: a sample shop, Fernhill Goods, for trying the purchase flow.
+
+The page is one file, `web/index.html`, with no dependencies and no build step.
 
 ## Two payment rails
 
@@ -66,6 +78,8 @@ Environment variables:
 - `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`: a PayPal sandbox app.
 - `PAYPAL_ENVIRONMENT=SANDBOX`
 - *(optional)* `AGENTPAY_LOGIN_PORT`: local port for the PayPal login return. Defaults to `8765`.
+- *(optional)* `AGENTPAY_UI_PORT`: local port for the web interface. Defaults to `8766`.
+- *(optional)* `AGENTPAY_DEMO_MERCHANT`: the PayPal sandbox business account the demo store pays. The store cannot take orders without it.
 - *(optional)* `AGENTPAY_TREASURY_ADDRESS`: a thirdweb server wallet holding test USD, used to credit agent wallets when a PayPal top-up is captured.
 
 ### Enable Log in with PayPal
@@ -113,6 +127,7 @@ node --env-file=.env dist/selftest.js
 - ✅ PayPal sandbox order creation and approval link
 - ⬜ Log in with PayPal and account-to-wallet linking (written, not yet run against the sandbox)
 - ⬜ Merchant purchases with `buy_with_paypal` (written, not yet run against the sandbox)
+- ⬜ Web interface (checked locally with sample data, not yet run with live PayPal data)
 - ⬜ funded green run (send test USD to the wallet)
 
 Next: let the user pre-approve a spending limit so the agent can buy without an approval step per order.
