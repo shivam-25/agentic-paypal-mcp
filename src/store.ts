@@ -38,6 +38,10 @@ export interface OrderRecord {
   paidAt?: string;
   /** Paid from the wallet without asking, because it was within the user's limit. */
   auto?: boolean;
+  /** Who chose the purchase: the user named it, or the agent chose it for a task. */
+  decidedBy?: "user" | "agent";
+  /** The agent's reason, for a purchase it chose itself. */
+  reason?: string;
 }
 
 const ORDERS_FILE = join(AGENTPAY_HOME, "orders.json");
@@ -79,9 +83,17 @@ export function markOrderPaid(id: string) {
 }
 
 /** Log a purchase that was paid automatically from the wallet. */
-export function recordAutoPaidOrder(order: Pick<OrderRecord, "id" | "kind" | "item" | "merchant" | "amountUSD">) {
+export function recordAutoPaidOrder(order: Pick<OrderRecord, "id" | "kind" | "item" | "merchant" | "amountUSD" | "decidedBy" | "reason">) {
   const now = new Date().toISOString();
   const orders = loadOrders();
   orders.unshift({ ...order, status: "paid", auto: true, createdAt: now, paidAt: now });
   saveOrders(orders.slice(0, 200));
+}
+
+/** How much has been paid automatically today, in USD. Counts toward the daily limit. */
+export function autoSpentToday(): number {
+  const today = new Date().toDateString();
+  return loadOrders()
+    .filter((o) => o.auto && o.paidAt && new Date(o.paidAt).toDateString() === today)
+    .reduce((sum, o) => sum + Number(o.amountUSD), 0);
 }
