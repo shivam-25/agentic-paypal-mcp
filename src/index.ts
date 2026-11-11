@@ -107,7 +107,7 @@ server.tool(
 // ── buy_with_paypal ──────────────────────────────────────────────────────────
 server.tool(
   "buy_with_paypal",
-  "Buy goods from a merchant. A purchase within the user's automatic limit is paid at once from the wallet. A larger one returns a PayPal approval link for the user; then call confirm_purchase with the orderId.",
+  "Buy goods from a merchant, either because the user named the item or because you chose it yourself for a task they gave you. The user's limits apply to both: a purchase within them is paid at once from the wallet, and one beyond them returns a PayPal approval link for the user; then call confirm_purchase with the orderId.",
   {
     merchant: z
       .string()
@@ -115,9 +115,16 @@ server.tool(
     item: z.string().describe("What is being bought, as it should appear on the PayPal receipt."),
     priceUSD: z.string().describe('Price per item in USD, e.g. "24.99".'),
     quantity: z.number().int().min(1).max(99).optional().describe("How many. Defaults to 1."),
+    decidedBy: z
+      .enum(["user", "agent"])
+      .optional()
+      .describe('Who chose this purchase: "user" if they named it, "agent" if you chose it yourself. Defaults to "user".'),
+    reason: z.string().optional().describe('Why you are buying this. Required when decidedBy is "agent".'),
   },
-  async ({ merchant, item, priceUSD, quantity }) => {
+  async ({ merchant, item, priceUSD, quantity, decidedBy, reason }) => {
     if (!linkedWallet()) return text(NOT_LINKED);
+    const who: "user" | "agent" = decidedBy ?? "user";
+    if (who === "agent" && !reason) return text("Give a reason for a purchase you chose yourself.");
     const unit = cleanUSD(priceUSD);
     if (!unit) return text(`"${priceUSD}" is not a valid USD price.`);
     const qty = quantity ?? 1;
@@ -135,6 +142,8 @@ server.tool(
           item: `${qty} × ${item}`,
           merchant,
           amountUSD: total,
+          decidedBy: who,
+          reason,
         });
         return text(
           [
@@ -160,6 +169,8 @@ server.tool(
         merchant,
         amountUSD: total,
         approveUrl: order.approveUrl,
+        decidedBy: who,
+        reason,
       });
       return text(
         [
