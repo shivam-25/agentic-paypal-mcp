@@ -10,36 +10,49 @@ import {
   thirdwebClient,
 } from "./config.js";
 import { sendPayout } from "./paypal.js";
+import { autoSpentToday } from "./store.js";
 import { disburse } from "./treasury.js";
 import { loadWalletMeta, serverWalletFor, usdBalance } from "./wallet.js";
 
 /**
- * Automatic payments. The user sets a limit; a purchase at or under it is paid
- * from the pre-funded wallet without asking, and anything larger goes to PayPal
- * for approval. The limit is set by the user in the web interface only. There
- * is deliberately no agent tool that changes it, so an agent cannot raise its
- * own spending limit.
+ * Automatic payments. The user sets two limits: the largest single purchase and
+ * the most in one day. A purchase inside both is paid from the pre-funded wallet
+ * without asking, whether the user asked for it or the agent chose it itself.
+ * Anything beyond goes to PayPal for approval. The limits are set by the user in
+ * the web interface only. There is deliberately no agent tool that changes
+ * them, so an agent cannot raise its own spending limits.
  */
 
 const SETTINGS_FILE = join(AGENTPAY_HOME, "settings.json");
 const DEFAULT_LIMIT_USD = 10;
+const DEFAULT_DAILY_USD = 50;
 const USD_DECIMALS = 6;
 
-/** The largest purchase, in USD, the agent may pay without asking. 0 turns it off. */
-export function autoApproveLimit(): number {
-  if (!existsSync(SETTINGS_FILE)) return DEFAULT_LIMIT_USD;
+function readSetting(key: string, fallback: number): number {
+  if (!existsSync(SETTINGS_FILE)) return fallback;
   try {
-    const limit = Number(JSON.parse(readFileSync(SETTINGS_FILE, "utf8")).autoApproveLimitUSD);
-    return Number.isFinite(limit) && limit >= 0 ? limit : DEFAULT_LIMIT_USD;
+    const value = Number(JSON.parse(readFileSync(SETTINGS_FILE, "utf8"))[key]);
+    return Number.isFinite(value) && value >= 0 ? value : fallback;
   } catch {
-    return DEFAULT_LIMIT_USD;
+    return fallback;
   }
 }
 
-export function setAutoApproveLimit(limitUSD: number): number {
-  const limit = Math.round(limitUSD * 100) / 100;
-  writeFileSync(SETTINGS_FILE, JSON.stringify({ autoApproveLimitUSD: limit }, null, 2));
-  return limit;
+/** The largest single purchase, in USD, the agent may pay without asking. 0 turns it off. */
+export function autoApproveLimit(): number {
+  return readSetting("autoApproveLimitUSD", DEFAULT_LIMIT_USD);
+}
+
+/** The most, in USD, the agent may pay without asking in one day. 0 turns it off. */
+export function dailyAutoLimit(): number {
+  return readSetting("dailyLimitUSD", DEFAULT_DAILY_USD);
+}
+
+export function setAutoLimits(perPurchaseUSD: number, perDayUSD: number) {
+  const round = (n: number) => Math.round(n * 100) / 100;
+  const settings = { autoApproveLimitUSD: round(perPurchaseUSD), dailyLimitUSD: round(perDayUSD) };
+  writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+  return { autoLimit: settings.autoApproveLimitUSD, dailyLimit: settings.dailyLimitUSD };
 }
 
 export type AutoPayCheck = { ok: true } | { ok: false; reason: string };
@@ -51,6 +64,14 @@ export async function canAutoPay(totalUSD: string): Promise<AutoPayCheck> {
   if (limit <= 0) return { ok: false, reason: "automatic payments are turned off." };
   if (total > limit) {
     return { ok: false, reason: `it is above the $${limit.toFixed(2)} automatic limit.` };
+  }
+  const daily = dailyAutoLimit();
+  const spent = autoSpentToday();
+  if (spent + total > daily) {
+    return {
+      ok: false,
+      reason: `it would pass the $${daily.toFixed(2)} a day automatic limit ($${spent.toFixed(2)} already paid today).`,
+    };
   }
   if (!TREASURY_ADDRESS) return { ok: false, reason: "automatic payments are not set up on this server." };
   const meta = loadWalletMeta();
