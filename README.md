@@ -1,50 +1,67 @@
-# Agentic paypal
+# Agentic PayPal
 
-**Paypal for Agentic Economy.**
+**PayPal for the agentic economy** — give any AI agent a wallet linked to the user's PayPal
+account, and let it buy things.
 
-AgenticPaypal is a [Model Context Protocol](https://modelcontextprotocol.io) server. Add it to
-**Claude Desktop, Claude Code, or Codex**, onboard with an email, fund it occasionally — and
-your agent pays for goods and services on its own, using paypal, across the globe, in **USD**. No payment code, no seed phrases, no
-hand-holding.
+Agentic PayPal is a [Model Context Protocol](https://modelcontextprotocol.io) server. Add it to
+**Claude Desktop, Claude Code, or Codex**, log in with your PayPal email, and your agent can buy
+**goods** from a merchant store and **services** on its own, in **USD** — no payment code, no seed
+phrases.
 
-Built for the **PayPal AI Hackathon**. Two payment rails:
+Built for the **PayPal AI Hackathon**. PayPal is a merchant business, so the demo leads with
+**buying goods**, with small-dollar and large-dollar payments handled differently:
 
-- **PayPal** — fund the agent wallet and pay merchants (Orders API, sandbox).
-- **x402** — pay any HTTP `402 Payment Required` service automatically.
+- **Micro (pre-approved)** — purchases within the user's limit are paid automatically from the
+  pre-funded wallet, no prompt.
+- **Macro (post-approval)** — larger purchases return a PayPal approval link; the user approves,
+  then the agent captures it.
 
-Wallets are **thirdweb** server wallets (managed, recoverable, on-ramp-ready). Everything is
-presented to the user in dollars; the stablecoin underneath is an implementation detail.
+Both the **agent** (for a goal you give it) and the **user** can buy; every order records who chose
+it. Wallets are **thirdweb** server wallets (managed, recoverable, on-ramp-ready). Amounts are shown
+in dollars; the stablecoin underneath is an implementation detail.
 
 ---
 
 ## How it works
 
 ```
-You: "get me the premium oil-market feed"
-  → Claude/Codex calls  pay_for_service(url)
-  → the service replies HTTP 402 (needs $0.01)
-  → AgentPay signs & settles from your wallet  (gasless, in USD)
-  → the agent returns the unlocked data
+You: "buy me a mug and a notebook set"
+  → agent calls  browse_store()  then  buy_product("mug")  buy_product("notebooks")
+  → each is within your $10 auto-limit → paid from the wallet instantly
+You: "order the $39 desk lamp"
+  → buy_product("lamp") is above the limit → returns a PayPal approval link
+  → you approve → agent calls confirm_purchase(orderId) → done
 ```
 
-Three flows:
+Flows:
 
-1. **Onboard** (once) — Onboard customer using their email associated with paypal. In the background, a thirdweb wallet for your email and
-   returns a setup link.
-2. **Fund** (occasionally) — `fund_with_paypal($5)` → approve in PayPal → wallet credited.
-3. **Pay** (every purchase) — `pay_for_service(url)` pays x402 services; `pay_paypal(...)`
-   pays merchants.
+1. **Log in** (once) — `link_paypal(email)` links the wallet to the user's PayPal email.
+2. **Fund** (occasionally) — `fund_with_paypal($20)` → approve in PayPal → wallet credited.
+3. **Buy** — `buy_product(id)` for goods (auto or approval by amount); `pay_for_service(url)` for
+   x402 data services.
 
 ## Tools
 
-| Tool | Rail | Description |
-|------|------|-------------|
-| `setup_wallet` | thirdweb | Create/load the agent wallet from an email; returns address + setup link. |
-| `get_balance` | thirdweb | Show the available USD balance. |
-| `fund_with_paypal` | PayPal | Create a PayPal order to top up the wallet; returns an approval link. |
-| `confirm_funding` | PayPal | Capture the approved payment and credit the wallet in USD. |
-| `pay_for_service` | x402 | Call any URL; on HTTP 402, pay automatically and return the content. |
-| `pay_paypal` | PayPal | Pay a merchant directly via PayPal in USD. |
+| Tool | Description |
+|------|-------------|
+| `link_paypal` | Log in / link the wallet to the user's PayPal email. Call first. (`setup_wallet` is an alias.) |
+| `get_balance` | Show the available USD balance. |
+| `fund_with_paypal` | Create a PayPal order to top up the wallet; returns an approval link. |
+| `confirm_funding` | Capture an approved top-up and credit the wallet in USD. |
+| `browse_store` | List the merchant store's goods, with id, price, and the auto-pay limit. |
+| `buy_product` | Buy a good. Within the limit → paid automatically; above it → PayPal approval link. Records `decidedBy` user/agent + reason. |
+| `confirm_purchase` | Capture an approved (macro) purchase. |
+| `browse_market` | List x402 data services the agent can buy. |
+| `pay_for_service` | Call any URL; on HTTP 402, pay automatically and return the content. |
+
+### Spending limits
+
+The user sets two limits (not changeable by any agent tool, so an agent can't raise its own cap):
+
+- `AGENTPAY_AUTO_LIMIT_USD` — largest single auto-paid purchase (default `10`).
+- `AGENTPAY_DAILY_LIMIT_USD` — most auto-paid in one day (default `50`).
+
+Both are also stored per-user in `~/.agentpay/settings.json`.
 
 ## Setup
 
@@ -60,8 +77,8 @@ Required environment variables:
 - `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` — a
   [PayPal sandbox app](https://developer.paypal.com/dashboard/applications/sandbox).
 - `PAYPAL_ENVIRONMENT=SANDBOX`
-- *(optional)* `AGENTPAY_TREASURY_ADDRESS` — a thirdweb server wallet holding test USD, used
-  to credit agent wallets when a PayPal top-up is captured.
+- *(optional)* `AGENTPAY_TREASURY_ADDRESS` — a thirdweb server wallet holding test USD, used to
+  credit agent wallets on a top-up and to collect auto-paid purchases.
 
 ### Add to Claude Desktop
 
@@ -70,9 +87,9 @@ Required environment variables:
 ```json
 {
   "mcpServers": {
-    "agentpay": {
+    "agentic-paypal": {
       "command": "node",
-      "args": ["/absolute/path/to/agentpay-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/agentic-paypal-mcp/dist/index.js"],
       "env": {
         "THIRDWEB_SECRET_KEY": "…",
         "PAYPAL_CLIENT_ID": "…",
@@ -84,27 +101,12 @@ Required environment variables:
 }
 ```
 
-Then ask your agent to `setup_wallet` with your email and you're ready.
-
-## Self-test
-
-Prove the whole chain without an MCP host — creates the wallet and pays a live x402 service:
-
-```bash
-node --env-file=.env dist/selftest.js
-```
-
-## Status
-
-- ✅ thirdweb server wallet creation
-- ✅ x402 payment signed & accepted by the facilitator
-- ✅ PayPal sandbox order creation + approval link
-- ⬜ funded green run (send test USD to the wallet)
+Then ask your agent to `link_paypal` with your PayPal email and you're ready.
 
 ## Testnet only
 
-Runs on **Arbitrum Sepolia** (test USD) and the **PayPal sandbox** (fake money). No real
-funds move. Swap to production chains/keys when ready.
+Runs on **Arbitrum Sepolia** (test USD) and the **PayPal sandbox** (fake money). No real funds
+move. Swap to production chains/keys when ready.
 
 ## License
 

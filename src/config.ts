@@ -10,6 +10,10 @@ import { createThirdwebClient, type ThirdwebClient } from "thirdweb";
  * stablecoin is an implementation detail and never surfaced by name.
  */
 
+// Product name shown to the user (PayPal checkout, tool output). PayPal is a
+// merchant business, so the demo leads with buying goods, not just data calls.
+export const BRAND_NAME = "Agentic PayPal";
+
 export const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID ?? "";
 export const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET ?? "";
 export const PAYPAL_ENVIRONMENT = (process.env.PAYPAL_ENVIRONMENT ?? "SANDBOX").toUpperCase();
@@ -37,6 +41,10 @@ export const TREASURY_ADDRESS = process.env.AGENTPAY_TREASURY_ADDRESS ?? "";
 // Hosted onboarding / funding UI base.
 export const ONBOARD_UI_BASE =
   process.env.AGENTPAY_ONBOARD_URL ?? "https://agentpay-test.carry.exchange/onboard";
+
+// PayPal account (sandbox business email) that the demo store's goods are paid
+// to. Shown on macro-purchase approval; falls back to the funding account.
+export const DEMO_MERCHANT = process.env.AGENTPAY_DEMO_MERCHANT ?? "Fernhill Goods";
 
 // Where the agent's wallet metadata lives on the host machine.
 export const AGENTPAY_HOME = process.env.AGENTPAY_HOME ?? join(homedir(), ".agentpay");

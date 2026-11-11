@@ -1,4 +1,5 @@
 import {
+  BRAND_NAME,
   PAYPAL_API_BASE,
   PAYPAL_CLIENT_ID,
   PAYPAL_CLIENT_SECRET,
@@ -57,7 +58,7 @@ export async function createOrder(
         },
       ],
       application_context: {
-        brand_name: "AgentPay",
+        brand_name: BRAND_NAME,
         user_action: "PAY_NOW",
         return_url: returnUrl,
         cancel_url: cancelUrl,
